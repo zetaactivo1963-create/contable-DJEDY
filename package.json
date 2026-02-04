@@ -1,0 +1,22 @@
+{
+  "name": "telegram-accounting-bot",
+  "version": "1.0.0",
+  "description": "Bot de Telegram para contabilidad personal con Google Sheets",
+  "main": "api/telegram.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "start": "node api/telegram.js"
+  },
+  "dependencies": {
+    "googleapis": "^128.0.0",
+    "node-fetch": "^2.6.9",
+    "telegraf": "^4.12.2"
+  },
+  "devDependencies": {
+    "dotenv": "^16.0.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
