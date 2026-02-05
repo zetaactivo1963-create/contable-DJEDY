@@ -62,8 +62,13 @@ module.exports = async (req, res) => {
 
   try {
     const update = req.body;
-    bot.context.sheetsClient = sheetsClient;
+    
+    // Asegurar que sheetsClient esté inicializado
+    await getSheetsClient();
+    
+    // Procesar el update
     await bot.handleUpdate(update);
+    
     res.status(200).json({ status: 'ok' });
   } catch (error) {
     console.error('❌ Error procesando webhook:', error);
