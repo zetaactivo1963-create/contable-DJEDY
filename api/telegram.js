@@ -17,15 +17,36 @@ for (const envVar of requiredEnvVars) {
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-let sheetsClient;
-(async () => {
-  try {
-    sheetsClient = await initializeSheets();
-    console.log('✅ Google Sheets inicializado');
-  } catch (error) {
-    console.error('❌ Error inicializando Google Sheets:', error);
+let sheetsClient = null;
+
+// Función para obtener sheetsClient con manejo de errores
+async function getSheetsClient() {
+  if (!sheetsClient) {
+    try {
+      sheetsClient = await initializeSheets();
+      console.log('✅ Google Sheets inicializado');
+    } catch (error) {
+      console.error('❌ Error inicializando Google Sheets:', error);
+      throw error;
+    }
   }
-})();
+  return sheetsClient;
+}
+
+// Middleware para asegurar que sheetsClient esté disponible
+bot.use(async (ctx, next) => {
+  try {
+    ctx.sheetsClient = await getSheetsClient();
+  } catch (error) {
+    console.error('❌ No se pudo obtener sheetsClient:', error);
+    // Responder con error claro
+    if (ctx.message && ctx.message.text !== '/start') {
+      await ctx.reply('⚠️ El servicio de Google Sheets no está disponible. Intenta de nuevo en unos segundos.');
+      return;
+    }
+  }
+  await next();
+});
 
 module.exports = async (req, res) => {
   if (req.method === 'GET') {
