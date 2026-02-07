@@ -233,22 +233,77 @@ bot.command('eventos', async (ctx) => {
 bot.command('balance', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
-    const balances = await sheetsClient.getBalances();
     
-    await ctx.reply(
-      `💰 *BALANCE DE CUENTAS*\n\n` +
-      `🎧 *Personal:* $${balances.personal.toFixed(2)}\n` +
-      `🏢 *DJ EDY Empresa:* $${balances.empresa.toFixed(2)}\n` +
-      `💰 *Ahorros:* $${balances.ahorro.toFixed(2)}\n\n` +
-      `📈 *Total General:* $${(balances.personal + balances.empresa + balances.ahorro).toFixed(2)}\n\n` +
-      `*🔄 Próxima actualización:* ${new Date().toLocaleDateString('es-ES')}`,
-      { parse_mode: 'Markdown' }
-    );
+    // Obtener todos los balances
+    const response = await sheetsClient.sheets.spreadsheets.values.get({
+      spreadsheetId: sheetsClient.sheetId,
+      range: 'balance_cuentas!A:D',
+    });
+    
+    const rows = response.data.values || [];
+    let balances = {
+      personal: { actual: 0, pendiente: 0 },
+      djEdy: { actual: 0, pendiente: 0 },
+      ahorros: { actual: 0, pendiente: 0 }
+    };
+    
+    // Extraer valores
+    rows.forEach(row => {
+      const cuenta = row[0];
+      const actual = parseFloat(row[1]) || 0;
+      const pendiente = parseFloat(row[2]) || 0;
+      
+      if (cuenta === 'Personal') {
+        balances.personal = { actual, pendiente };
+      } else if (cuenta === 'DJ EDY') {
+        balances.djEdy = { actual, pendiente };
+      } else if (cuenta === 'Ahorros') {
+        balances.ahorros = { actual, pendiente };
+      }
+    });
+    
+    // Calcular totales
+    const totalPersonal = balances.personal.actual + balances.personal.pendiente;
+    const totalDjEdy = balances.djEdy.actual + balances.djEdy.pendiente;
+    const totalAhorros = balances.ahorros.actual + balances.ahorros.pendiente;
+    const totalGeneral = totalPersonal + totalDjEdy + totalAhorros;
+    
+    // Construir mensaje
+    let mensaje = `💰 *BALANCE DE CUENTAS*\n\n`;
+    
+    // Personal
+    mensaje += `🎧 *Personal:* $${totalPersonal.toFixed(2)}\n`;
+    if (balances.personal.pendiente !== 0) {
+      mensaje += `   └ Pendiente: $${balances.personal.pendiente.toFixed(2)}\n`;
+    }
+    
+    // Ahorros
+    mensaje += `💰 *Ahorros:* $${totalAhorros.toFixed(2)}\n`;
+    if (balances.ahorros.pendiente !== 0) {
+      mensaje += `   └ Pendiente: $${balances.ahorros.pendiente.toFixed(2)}\n`;
+    }
+    
+    // DJ EDY (con desglose)
+    mensaje += `🏢 *DJ EDY Empresa:* $${totalDjEdy.toFixed(2)}\n`;
+    if (balances.djEdy.pendiente > 0) {
+      mensaje += `   └ Depósitos retenidos: $${balances.djEdy.pendiente.toFixed(2)}\n`;
+    }
+    if (balances.djEdy.actual > 0) {
+      mensaje += `   └ Fondo empresa: $${balances.djEdy.actual.toFixed(2)}\n`;
+    }
+    
+    // Total general
+    mensaje += `\n📈 *Total General:* $${totalGeneral.toFixed(2)}\n\n`;
+    mensaje += `*🔄 Última actualización:* ${new Date().toLocaleDateString('es-ES')}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
     
   } catch (error) {
-    await ctx.reply(`❌ Error: ${error.message}`);
+    console.error('Error en /balance:', error);
+    await ctx.reply(`❌ Error obteniendo balance: ${error.message}`);
   }
 });
+
 
 // Handler para mensajes de texto (flujo conversacional)
 bot.on('text', async (ctx) => {
