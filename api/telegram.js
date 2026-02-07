@@ -24,6 +24,96 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
+
+// ========== COMANDO /REPORTE ==========
+bot.command('reporte', async (ctx) => {
+  try {
+    const args = ctx.message.text.split(' ').slice(1);
+    const mes = args[0] || new Date().toLocaleDateString('es-ES', { month: 'long' });
+    
+    const sheetsClient = ctx.sheetsClient;
+    
+    // Obtener eventos del mes
+    const eventos = await sheetsClient.getEventosDelMes(mes);
+    
+    // Obtener transacciones del mes
+    const transacciones = await sheetsClient.getTransaccionesDelMes(mes);
+    
+    // Calcular totales
+    let totalIngresos = 0;
+    let totalGastos = 0;
+    let eventosCompletados = 0;
+    let eventosEnProceso = 0;
+    
+    eventos.forEach(evento => {
+      if (evento.estado === 'completado') eventosCompletados++;
+      if (evento.estado === 'en_proceso') eventosEnProceso++;
+    });
+    
+    transacciones.forEach(t => {
+      const monto = parseFloat(t.monto) || 0;
+      if (t.tipo === 'ingreso') totalIngresos += monto;
+      if (t.tipo === 'gasto') totalGastos += monto;
+    });
+    
+    const balanceMes = totalIngresos - totalGastos;
+    
+    await ctx.reply(
+      `📊 *REPORTE MENSUAL - ${mes.toUpperCase()}*\n\n` +
+      `📅 *Eventos:*\n` +
+      `   ✅ Completados: ${eventosCompletados}\n` +
+      `   ⏳ En proceso: ${eventosEnProceso}\n` +
+      `   📋 Total: ${eventos.length}\n\n` +
+      `💰 *Finanzas:*\n` +
+      `   📈 Ingresos: $${totalIngresos.toFixed(2)}\n` +
+      `   📉 Gastos: $${totalGastos.toFixed(2)}\n` +
+      `   💰 Balance: $${balanceMes.toFixed(2)}\n\n` +
+      `🏢 *DJ EDY Empresa:*\n` +
+      `   Depósitos retenidos: $${(totalIngresos * 0.9).toFixed(2)}\n` +
+      `   Fondo empresa (10%): $${(totalIngresos * 0.1).toFixed(2)}\n\n` +
+      `📅 *Generado:* ${new Date().toLocaleDateString('es-ES')}`,
+      { parse_mode: 'Markdown' }
+    );
+    
+  } catch (error) {
+    console.error('Error en /reporte:', error);
+    await ctx.reply(`❌ Error generando reporte: ${error.message}`);
+  }
+});
+
+// ========== COMANDO /PROXIMOS ==========
+bot.command('proximos', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    const eventosProximos = await sheetsClient.getEventosProximos();
+    
+    if (eventosProximos.length === 0) {
+      await ctx.reply('📭 No hay eventos próximos en los próximos 7 días.');
+      return;
+    }
+    
+    let mensaje = `🔔 *EVENTOS PRÓXIMOS (7 días)*\n\n`;
+    
+    eventosProximos.forEach(evento => {
+      const diasRestantes = Math.ceil((new Date(evento.fecha_evento) - new Date()) / (1000 * 60 * 60 * 24));
+      const porcentaje = (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0);
+      
+      mensaje += `📅 *${evento.nombre}*\n`;
+      mensaje += `   👤 ${evento.cliente || 'Sin cliente'}\n`;
+      mensaje += `   🗓️ ${evento.fecha_evento} (en ${diasRestantes} días)\n`;
+      mensaje += `   💰 $${evento.pagado_total.toFixed(2)} / $${evento.presupuesto_total.toFixed(2)} (${porcentaje}%)\n`;
+      mensaje += `   ⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
+      mensaje += `   ──────────────\n`;
+    });
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
+
 // Handler principal para Vercel
 module.exports = async (req, res) => {
   if (req.method === 'GET') {
