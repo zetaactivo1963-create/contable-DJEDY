@@ -395,6 +395,111 @@ bot.command('balance', async (ctx) => {
 });
 
 
+// ========== COMANDO /GASTO ==========
+bot.command('gasto', async (ctx) => {
+  const args = ctx.message.text.split(' ').slice(1);
+  
+  if (args.length < 3) {
+    await ctx.reply(
+      `❌ *Formato incorrecto*\n\n` +
+      `Usa: /gasto [ID_EVENTO] [MONTO] [DESCRIPCIÓN]\n\n` +
+      `*Ejemplos:*\n` +
+      `/gasto E001 200 transporte\n` +
+      `/gasto E001 500 alquiler equipo\n` +
+      `/gasto E001 150 ayudante extra`,
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+  
+  const [eventoId, montoStr, ...descripcionParts] = args;
+  const descripcion = descripcionParts.join(' ');
+  const monto = parseFloat(montoStr.replace(',', '.'));
+  
+  if (isNaN(monto) || monto <= 0) {
+    await ctx.reply('❌ Monto inválido. Usa números positivos (ej: 200, 50.5).');
+    return;
+  }
+  
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    const resultado = await sheetsClient.registrarGastoEvento(
+      eventoId, 
+      monto, 
+      descripcion,
+      ctx.chat.id,
+      ctx.from.username || ctx.from.first_name
+    );
+    
+    await ctx.reply(
+      `📉 *GASTO REGISTRADO*\n\n` +
+      `📋 Evento: ${eventoId} - ${resultado.eventoNombre}\n` +
+      `💰 Gasto: $${monto.toFixed(2)}\n` +
+      `📝 Descripción: ${descripcion}\n\n` +
+      `📊 *Impacto en evento:*\n` +
+      `   Presupuesto total: $${resultado.presupuestoTotal.toFixed(2)}\n` +
+      `   Gastos acumulados: $${resultado.gastosTotales.toFixed(2)}\n` +
+      `   Neto para repartir: $${resultado.netoRestante.toFixed(2)}\n\n` +
+      `✅ *Este gasto se restará al calcular la repartición final.*`,
+      { parse_mode: 'Markdown' }
+    );
+    
+  } catch (error) {
+    console.error('Error en /gasto:', error);
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
+// ========== COMANDO /GASTOSEVENTO ==========
+bot.command('gastosevento', async (ctx) => {
+  const args = ctx.message.text.split(' ').slice(1);
+  
+  if (args.length !== 1) {
+    await ctx.reply('❌ Usa: /gastosevento [ID_EVENTO]');
+    return;
+  }
+  
+  const eventoId = args[0];
+  
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    const gastos = await sheetsClient.getGastosEvento(eventoId);
+    const evento = await sheetsClient.getEventoById(eventoId);
+    
+    if (!evento) {
+      await ctx.reply(`❌ Evento ${eventoId} no encontrado.`);
+      return;
+    }
+    
+    if (gastos.length === 0) {
+      await ctx.reply(`📭 No hay gastos registrados para ${eventoId} - ${evento.nombre}`);
+      return;
+    }
+    
+    let totalGastos = 0;
+    let mensaje = `📋 *GASTOS - ${eventoId} - ${evento.nombre}*\n\n`;
+    
+    gastos.forEach((gasto, index) => {
+      totalGastos += gasto.monto;
+      const fecha = new Date(gasto.fecha).toLocaleDateString('es-ES');
+      mensaje += `${index + 1}. $${gasto.monto.toFixed(2)} - ${gasto.descripcion}\n`;
+      mensaje += `   📅 ${fecha}\n`;
+      if (index < gastos.length - 1) mensaje += `   ─────\n`;
+    });
+    
+    mensaje += `\n💰 *Total gastos:* $${totalGastos.toFixed(2)}\n`;
+    mensaje += `🎯 *Presupuesto total:* $${evento.presupuesto_total.toFixed(2)}\n`;
+    mensaje += `📊 *Neto para repartir:* $${(evento.presupuesto_total - totalGastos).toFixed(2)}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
+
 // Handler para mensajes de texto (flujo conversacional)
 bot.on('text', async (ctx) => {
   try {
