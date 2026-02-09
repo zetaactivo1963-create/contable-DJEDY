@@ -838,6 +838,82 @@ bot.on('callback_query', async (ctx) => {
   }
 });
 
+
+// ========== BOTONES DE AYUDA INLINE ==========
+bot.on('callback_query', async (ctx) => {
+  try {
+    const action = ctx.callbackQuery.data;
+    await ctx.answerCbQuery();
+    
+    switch(action) {
+      case 'help_eventos':
+        await ctx.replyWithMarkdown(
+          '📅 *COMANDOS DE EVENTOS*\n\n' +
+          '`/nuevoevento` - Crear nuevo evento\n' +
+          '`/eventos` - Ver eventos activos\n' +
+          '`/evento E001` - Ver detalle de evento\n' +
+          '`/gastosevento E001` - Ver gastos de evento\n' +
+          '`/proximos` - Eventos próximos (7 días)'
+        );
+        break;
+        
+      case 'help_pagos':
+        await ctx.replyWithMarkdown(
+          '💰 *COMANDOS DE PAGOS*\n\n' +
+          '`/deposito E001 500` - Registrar depósito\n' +
+          '`/pagocompleto E001 1500` - Pago completo\n\n' +
+          '*Formato:* `/comando [ID] [MONTO]`\n\n' +
+          '*Ejemplos:*\n' +
+          '`/deposito E001 500`\n' +
+          '`/pagocompleto E001 1000`'
+        );
+        break;
+        
+      case 'help_gastos':
+        await ctx.replyWithMarkdown(
+          '📉 *COMANDOS DE GASTOS*\n\n' +
+          '`/gasto E001 200 transporte` - Gasto en evento\n' +
+          '`/gastodirecto 150 publicidad` - Gasto directo DJ EDY\n' +
+          '`/gastosevento E001` - Ver gastos de evento\n\n' +
+          '*Ejemplos:*\n' +
+          '`/gasto E001 300 ayudante_extra`\n' +
+          '`/gastodirecto 200 compra_equipo`\n' +
+          '`/gastosevento E001`'
+        );
+        break;
+        
+      case 'help_finanzas':
+        await ctx.replyWithMarkdown(
+          '📊 *COMANDOS DE FINANZAS*\n\n' +
+          '`/balance` - Ver balances\n' +
+          '`/reporte` - Reporte mensual\n' +
+          '`/retenciones` - Ver retenciones\n\n' +
+          '*Ejemplos:*\n' +
+          '`/balance`\n' +
+          '`/reporte enero`\n' +
+          '`/retenciones`'
+        );
+        break;
+        
+      case 'menu_principal':
+        // Volver al menú principal
+        ctx.message = { 
+          text: '/start', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.handleUpdate({ 
+          message: ctx.message,
+          update_id: Date.now()
+        });
+        break;
+    }
+  } catch (error) {
+    console.error('Error en callback ayuda:', error);
+  }
+});
+
+
 // Manejo de errores
 bot.catch((err, ctx) => {
   console.error(`Error:`, err);
