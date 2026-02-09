@@ -724,15 +724,22 @@ bot.command('gastosevento', async (ctx) => {
 });
 
 
-// Handler para mensajes de texto (flujo conversacional)
+// ========== IMPORTANTE: Handler para mensajes de texto ==========
 bot.on('text', async (ctx) => {
   try {
+    // Si es un comando, ignorar (ya se manejan arriba)
+    if (ctx.message.text.startsWith('/')) {
+      return;
+    }
+    
+    // Si no es comando, pasar a handleMessage
     await handleMessage(ctx);
   } catch (error) {
-    console.error('Error en mensaje:', error);
+    console.error('❌ Error en bot.on(text):', error);
     await ctx.reply('❌ Error procesando mensaje.');
   }
 });
+
 
 // ========== MANEJO DE BOTONES INLINE ==========
 bot.on('callback_query', async (ctx) => {
