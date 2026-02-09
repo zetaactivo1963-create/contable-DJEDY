@@ -182,37 +182,26 @@ module.exports = async (req, res) => {
 
 // ========== COMANDOS PRINCIPALES ==========
 
-// ========== COMANDO /START CON BOTONES ==========
+// ========== COMANDO /START CON TECLADO DE RESPUESTA ==========
 bot.start(async (ctx) => {
-  const menuKeyboard = {
-    inline_keyboard: [
-      [
-        { text: '📅 Nuevo Evento', callback_data: 'menu_nuevoevento' },
-        { text: '📋 Ver Eventos', callback_data: 'menu_eventos' }
-      ],
-      [
-        { text: '💰 Registrar Depósito', callback_data: 'menu_deposito' },
-        { text: '✅ Pago Completo', callback_data: 'menu_pagocompleto' }
-      ],
-      [
-        { text: '📉 Gasto en Evento', callback_data: 'menu_gasto' },
-        { text: '🏢 Gasto Directo', callback_data: 'menu_gastodirecto' }
-      ],
-      [
-        { text: '📊 Ver Balance', callback_data: 'menu_balance' },
-        { text: '📈 Reporte Mensual', callback_data: 'menu_reporte' }
-      ],
-      [
-        { text: '❓ Ayuda Completa', callback_data: 'menu_ayuda' },
-        { text: '📋 Todos los Comandos', callback_data: 'menu_comandos' }
-      ]
-    ]
+  // Crear teclado de respuesta (aparece debajo del chat)
+  const replyKeyboard = {
+    keyboard: [
+      ['📅 Nuevo Evento', '📋 Ver Eventos'],
+      ['💰 Registrar Depósito', '✅ Pago Completo'],
+      ['📉 Gasto en Evento', '🏢 Gasto Directo'],
+      ['📊 Ver Balance', '📈 Reporte Mensual'],
+      ['❓ Ayuda', '📋 Comandos']
+    ],
+    resize_keyboard: true,    // Teclado más pequeño
+    one_time_keyboard: false, // Permanece visible
+    selective: true
   };
 
   await ctx.reply(
     `🎧 *¡Hola DJ EDY!*\n\n` +
     `Sistema de contabilidad profesional para tus eventos.\n\n` +
-    `*👆 Usa los botones o escribe comandos:*\n\n` +
+    `*👆 Usa los botones debajo o escribe comandos:*\n\n` +
     `*📝 Ejemplos rápidos:*\n` +
     `• /deposito E001 500\n` +
     `• /gasto E001 200 transporte\n` +
@@ -220,7 +209,7 @@ bot.start(async (ctx) => {
     `• /reporte`,
     { 
       parse_mode: 'Markdown',
-      reply_markup: menuKeyboard
+      reply_markup: replyKeyboard
     }
   );
 });
@@ -775,79 +764,178 @@ bot.command('gastosevento', async (ctx) => {
   }
 });
 
-
-// ========== IMPORTANTE: Handler para mensajes de texto ==========
-bot.on('text', async (ctx) => {
-  try {
-    // Si es un comando, ignorar (ya se manejan arriba)
-    if (ctx.message.text.startsWith('/')) {
-      return;
-    }
-    
-    // Si no es comando, pasar a handleMessage
-    await handleMessage(ctx);
-  } catch (error) {
-    console.error('❌ Error en bot.on(text):', error);
-    await ctx.reply('❌ Error procesando mensaje.');
-  }
-});
-
-
-// ========== MANEJADOR SIMPLE DE BOTONES ==========
-bot.on('callback_query', async (ctx) => {
-  const action = ctx.callbackQuery.data;
+// ========== MANEJADOR DE BOTONES DEL TECLADO ==========
+bot.hears(['📅 Nuevo Evento', '📋 Ver Eventos', '💰 Registrar Depósito', '✅ Pago Completo', 
+           '📉 Gasto en Evento', '🏢 Gasto Directo', '📊 Ver Balance', '📈 Reporte Mensual',
+           '❓ Ayuda', '📋 Comandos'], async (ctx) => {
   
-  // IMPORTANTE: Esto quita el "loading" inmediatamente
-  await ctx.answerCbQuery();
+  const buttonText = ctx.message.text;
+  console.log(`🔔 Botón presionado: ${buttonText}`);
   
-  console.log(`🔔 Botón: ${action}`);
-  
-  // Respuestas MUY SIMPLES - sin lógica compleja
-  switch(action) {
-    case 'menu_nuevoevento':
-      await ctx.reply('Escribe: /nuevoevento');
+  switch(buttonText) {
+    case '📅 Nuevo Evento':
+      await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
       break;
-    case 'menu_eventos':
-      await ctx.reply('Escribe: /eventos');
+      
+    case '📋 Ver Eventos':
+      // Ejecutar directamente la lógica de /eventos
+      try {
+        const sheetsClient = ctx.sheetsClient;
+        const eventos = await sheetsClient.getEventosActivos();
+        
+        if (eventos.length === 0) {
+          await ctx.reply('📭 No hay eventos activos.');
+          return;
+        }
+        
+        let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
+        
+        eventos.forEach((evento, index) => {
+          const porcentaje = evento.presupuesto_total > 0 
+            ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
+            : '0';
+          
+          const gastosTotales = parseFloat(evento.gastos_totales) || 0;
+          
+          mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+          mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
+          mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
+          mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
+          mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
+          
+          if (gastosTotales > 0) {
+            mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
+            mensaje += `📊 *Neto:* $${(evento.presupuesto_total - gastosTotales).toFixed(2)}\n`;
+          }
+          
+          mensaje += `📈 Estado: ${evento.estado}\n`;
+          
+          if (index < eventos.length - 1) {
+            mensaje += `──────────────\n`;
+          }
+        });
+        
+        await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+        
+      } catch (error) {
+        await ctx.reply(`❌ Error: ${error.message}`);
+      }
       break;
-    case 'menu_deposito':
-      await ctx.reply('Formato: /deposito [ID] [MONTO]\nEjemplo: /deposito E001 500');
+      
+    case '💰 Registrar Depósito':
+      await ctx.reply(
+        '💰 *REGISTRAR DEPÓSITO*\n\n' +
+        '*Formato:* `/deposito [ID] [MONTO]`\n\n' +
+        '*Ejemplo:* `/deposito E001 500`\n\n' +
+        '*Para ver IDs:* Usa el botón "📋 Ver Eventos"',
+        { parse_mode: 'Markdown' }
+      );
       break;
-    case 'menu_pagocompleto':
-      await ctx.reply('Formato: /pagocompleto [ID] [MONTO]\nEjemplo: /pagocompleto E001 1500');
+      
+    case '✅ Pago Completo':
+      await ctx.reply(
+        '✅ *PAGO COMPLETO*\n\n' +
+        '*Formato:* `/pagocompleto [ID] [MONTO]`\n\n' +
+        '*Ejemplo:* `/pagocompleto E001 1500`\n\n' +
+        '*Nota:* Reparte automáticamente 65/25/10',
+        { parse_mode: 'Markdown' }
+      );
       break;
-    case 'menu_gasto':
-      await ctx.reply('Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\nEjemplo: /gasto E001 200 transporte');
+      
+    case '📉 Gasto en Evento':
+      await ctx.reply(
+        '📉 *GASTO EN EVENTO*\n\n' +
+        '*Formato:* `/gasto [ID] [MONTO] [DESCRIPCIÓN]`\n\n' +
+        '*Ejemplo:* `/gasto E001 200 transporte`',
+        { parse_mode: 'Markdown' }
+      );
       break;
-    case 'menu_gastodirecto':
-      await ctx.reply('Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\nEjemplo: /gastodirecto 150 publicidad');
+      
+    case '🏢 Gasto Directo':
+      await ctx.reply(
+        '🏢 *GASTO DIRECTO DJ EDY*\n\n' +
+        '*Formato:* `/gastodirecto [MONTO] [DESCRIPCIÓN]`\n\n' +
+        '*Ejemplo:* `/gastodirecto 150 publicidad`',
+        { parse_mode: 'Markdown' }
+      );
       break;
-    case 'menu_balance':
-      await ctx.reply('Escribe: /balance');
+      
+    case '📊 Ver Balance':
+      // Ejecutar lógica de /balance directamente
+      try {
+        const sheetsClient = ctx.sheetsClient;
+        
+        const response = await sheetsClient.sheets.spreadsheets.values.get({
+          spreadsheetId: sheetsClient.sheetId,
+          range: 'balance_cuentas!A:D',
+        });
+        
+        const rows = response.data.values || [];
+        let balances = {
+          personal: { actual: 0, pendiente: 0 },
+          djEdy: { actual: 0, pendiente: 0 },
+          ahorros: { actual: 0, pendiente: 0 }
+        };
+        
+        rows.forEach(row => {
+          const cuenta = row[0];
+          const actual = parseFloat(row[1]) || 0;
+          const pendiente = parseFloat(row[2]) || 0;
+          
+          if (cuenta === 'Personal') balances.personal = { actual, pendiente };
+          if (cuenta === 'DJ EDY') balances.djEdy = { actual, pendiente };
+          if (cuenta === 'Ahorros') balances.ahorros = { actual, pendiente };
+        });
+        
+        const totalPersonal = balances.personal.actual + balances.personal.pendiente;
+        const totalDjEdy = balances.djEdy.actual + balances.djEdy.pendiente;
+        const totalAhorros = balances.ahorros.actual + balances.ahorros.pendiente;
+        const totalGeneral = totalPersonal + totalDjEdy + totalAhorros;
+        
+        let mensaje = `💰 *BALANCE DE CUENTAS*\n\n`;
+        mensaje += `🎧 *Personal:* $${totalPersonal.toFixed(2)}\n`;
+        if (balances.personal.pendiente !== 0) {
+          mensaje += `   └ Pendiente: $${balances.personal.pendiente.toFixed(2)}\n`;
+        }
+        
+        mensaje += `💰 *Ahorros:* $${totalAhorros.toFixed(2)}\n`;
+        if (balances.ahorros.pendiente !== 0) {
+          mensaje += `   └ Pendiente: $${balances.ahorros.pendiente.toFixed(2)}\n`;
+        }
+        
+        mensaje += `🏢 *DJ EDY Empresa:* $${totalDjEdy.toFixed(2)}\n`;
+        if (balances.djEdy.pendiente > 0) {
+          mensaje += `   └ Depósitos retenidos: $${balances.djEdy.pendiente.toFixed(2)}\n`;
+        }
+        if (balances.djEdy.actual > 0) {
+          mensaje += `   └ Fondo empresa: $${balances.djEdy.actual.toFixed(2)}\n`;
+        }
+        
+        mensaje += `\n📈 *Total General:* $${totalGeneral.toFixed(2)}\n\n`;
+        mensaje += `🔄 *Actualizado:* ${new Date().toLocaleDateString('es-ES')}`;
+        
+        await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+        
+      } catch (error) {
+        console.error('Error en balance:', error);
+        await ctx.reply(`❌ Error: ${error.message}`);
+      }
       break;
-    case 'menu_reporte':
-      await ctx.reply('Escribe: /reporte');
+      
+    case '📈 Reporte Mensual':
+      await ctx.reply('Para ver reporte, escribe: /reporte\n\nPara mes específico: /reporte [mes]');
       break;
-    case 'menu_ayuda':
-      await ctx.reply('Escribe: /ayuda');
+      
+    case '❓ Ayuda':
+      await ctx.reply('Para ayuda completa, escribe: /ayuda');
       break;
-    case 'menu_comandos':
-      await ctx.reply('Escribe: /comandos');
+      
+    case '📋 Comandos':
+      await ctx.reply('Para ver todos los comandos, escribe: /comandos');
       break;
-    case 'menu_principal':
-      // Simular /start
-      ctx.message = { 
-        text: '/start', 
-        chat: ctx.callbackQuery.message.chat,
-        from: ctx.callbackQuery.from
-      };
-      return bot.handleUpdate({ 
-        message: ctx.message,
-        update_id: Date.now()
-      });
-      break;
+      
     default:
-      await ctx.reply('Usa /ayuda para ver comandos');
+      await ctx.reply('Usa /ayuda para ver todos los comandos disponibles.');
   }
 });
 
