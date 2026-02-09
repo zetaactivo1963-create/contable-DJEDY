@@ -189,15 +189,25 @@ bot.start(async (ctx) => {
     `Sistema de contabilidad profesional para tus eventos.\n\n` +
     `*📋 COMANDOS PRINCIPALES:*\n` +
     `/nuevoevento - Crear nuevo evento\n` +
-    `/deposito [ID] [MONTO] - Registrar depósito\n` +
-    `/pagocompleto [ID] [MONTO] - Completar pago (reparte 65/25/10)\n` +
-    `/eventos - Ver eventos activos\n` +
+    `/eventos - Ver eventos activos (con gastos)\n` +
+    `/proximos - Ver eventos próximos\n\n` +
+    `*💰 PAGOS:*\n` +
+    `/deposito ID MONTO - Registrar depósito\n` +
+    `/pagocompleto ID MONTO - Completar pago (reparte 65/25/10)\n\n` +
+    `*📉 GASTOS:*\n` +
+    `/gasto ID MONTO DESCRIPCIÓN - Gasto en evento\n` +
+    `/gastodirecto MONTO DESCRIPCIÓN - Gasto general DJ EDY\n` +
+    `/gastosevento ID - Ver gastos de evento\n\n` +
+    `*📊 FINANZAS:*\n` +
     `/balance - Ver balances\n` +
-    `/ayuda - Mostrar ayuda completa\n\n` +
+    `/reporte [MES] - Reporte mensual\n` +
+    `/ayuda - Ayuda completa\n\n` +
     `*📝 EJEMPLOS RÁPIDOS:*\n` +
     `• /nuevoevento\n` +
     `• /deposito E001 500\n` +
-    `• /pagocompleto E001 1500`,
+    `• /gasto E001 200 transporte\n` +
+    `• /gastodirecto 150 publicidad\n` +
+    `• /reporte enero`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -208,22 +218,33 @@ bot.help(async (ctx) => {
     `*🎧 SISTEMA DJ EDY - AYUDA COMPLETA*\n\n` +
     `*📅 GESTIÓN DE EVENTOS:*\n` +
     `/nuevoevento - Crear evento nuevo\n` +
-    `/eventos - Listar todos eventos\n` +
-    `/evento [ID] - Ver detalle de evento\n\n` +
+    `/eventos - Listar eventos activos (con gastos)\n` +
+    `/evento [ID] - Ver detalle de evento específico\n` +
+    `/gastosevento [ID] - Ver gastos de un evento\n` +
+    `/proximos - Ver eventos próximos (7 días)\n\n` +
     `*💰 PAGOS Y DEPÓSITOS:*\n` +
     `/deposito [ID] [MONTO] - Registrar depósito inicial\n` +
     `/pagocompleto [ID] [MONTO] - Registrar pago completo (reparte auto)\n` +
     `/pago [ID] [MONTO] - Registrar pago parcial\n\n` +
+    `*📉 GASTOS:*\n` +
+    `/gasto [ID] [MONTO] [DESCRIPCIÓN] - Gasto vinculado a evento\n` +
+    `/gastodirecto [MONTO] [DESCRIPCIÓN] - Gasto general DJ EDY\n` +
+    `/gastosevento [ID] - Ver gastos de evento\n\n` +
     `*📊 FINANZAS:*\n` +
     `/balance - Ver balances de cuentas\n` +
     `/retenciones - Ver retenciones del mes\n` +
-    `/reporte [MES] - Reporte mensual\n\n` +
+    `/reporte [MES] - Reporte mensual detallado\n\n` +
     `*📝 FORMATOS:*\n` +
     `• ID Evento: E001, E002, etc.\n` +
     `• Montos: 500, 1000.50, 2000\n` +
     `• Fechas: DD-MM-AAAA\n\n` +
     `*🔢 REPARTICIÓN AUTOMÁTICA:*\n` +
-    `Al completar pago: 65% Personal, 25% Ahorros, 10% DJ EDY`,
+    `Al completar pago: 65% Personal, 25% Ahorros, 10% DJ EDY\n\n` +
+    `*📋 GASTOS EN EVENTOS:*\n` +
+    `• Se muestran en /eventos\n` +
+    `• Se restan del neto para repartir\n` +
+    `• Se ven en /reporte separados\n\n` +
+    `📞 Soporte: @tu_usuario`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -452,6 +473,75 @@ bot.command('balance', async (ctx) => {
   }
 });
 
+
+// ========== COMANDO /RETENCIONES ==========
+bot.command('retenciones', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    // Obtener balances
+    const response = await sheetsClient.sheets.spreadsheets.values.get({
+      spreadsheetId: sheetsClient.sheetId,
+      range: 'balance_cuentas!A:D',
+    });
+    
+    const rows = response.data.values || [];
+    let djEdyPendiente = 0;
+    
+    // Buscar DJ EDY pendiente
+    rows.forEach(row => {
+      if (row[0] === 'DJ EDY') {
+        djEdyPendiente = parseFloat(row[2]) || 0;
+      }
+    });
+    
+    // Obtener eventos en proceso con depósitos retenidos
+    const eventos = await sheetsClient.getEventosActivos();
+    let eventosConRetencion = [];
+    
+    eventos.forEach(evento => {
+      if (evento.deposito_inicial && parseFloat(evento.deposito_inicial) > 0) {
+        eventosConRetencion.push(evento);
+      }
+    });
+    
+    let mensaje = `🏢 *RETENCIONES DJ EDY*\n\n`;
+    mensaje += `💰 *Total retenido:* $${djEdyPendiente.toFixed(2)}\n\n`;
+    
+    if (eventosConRetencion.length > 0) {
+      mensaje += `📋 *Eventos con depósitos retenidos:*\n`;
+      
+      eventosConRetencion.forEach((evento, index) => {
+        const deposito = parseFloat(evento.deposito_inicial) || 0;
+        const porcentaje = evento.presupuesto_total > 0 
+          ? (deposito / evento.presupuesto_total * 100).toFixed(0)
+          : '0';
+        
+        mensaje += `${index + 1}. *${evento.id} - ${evento.nombre}*\n`;
+        mensaje += `   Depósito: $${deposito.toFixed(2)} (${porcentaje}%)\n`;
+        mensaje += `   Pendiente total: $${evento.pendiente.toFixed(2)}\n`;
+        
+        if (index < eventosConRetencion.length - 1) {
+          mensaje += `   ─────\n`;
+        }
+      });
+      
+      mensaje += `\n`;
+    } else {
+      mensaje += `📭 No hay eventos con depósitos retenidos actualmente.\n\n`;
+    }
+    
+    mensaje += `💡 *Nota:* Los depósitos se retienen en DJ EDY hasta completar el pago.\n`;
+    mensaje += `Al completarse, se reparten: 65% Personal, 25% Ahorros, 10% DJ EDY.\n\n`;
+    mensaje += `📅 *Actualizado:* ${new Date().toLocaleDateString('es-ES')}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error en /retenciones:', error);
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
 
 // ========== COMANDO /GASTO ==========
 bot.command('gasto', async (ctx) => {
