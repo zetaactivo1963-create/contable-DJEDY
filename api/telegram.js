@@ -247,7 +247,7 @@ bot.help(async (ctx) => {
     `📞 Soporte: @tu_usuario`,
     { parse_mode: 'Markdown' }
   );
-});
+}); 
 
 // Comando /nuevoevento
 bot.command('nuevoevento', async (ctx) => {
