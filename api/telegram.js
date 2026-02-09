@@ -764,178 +764,77 @@ bot.command('gastosevento', async (ctx) => {
   }
 });
 
-// ========== MANEJADOR DE BOTONES DEL TECLADO ==========
-bot.hears(['📅 Nuevo Evento', '📋 Ver Eventos', '💰 Registrar Depósito', '✅ Pago Completo', 
-           '📉 Gasto en Evento', '🏢 Gasto Directo', '📊 Ver Balance', '📈 Reporte Mensual',
-           '❓ Ayuda', '📋 Comandos'], async (ctx) => {
-  
-  const buttonText = ctx.message.text;
-  console.log(`🔔 Botón presionado: ${buttonText}`);
-  
-  switch(buttonText) {
-    case '📅 Nuevo Evento':
-      await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
-      break;
-      
-    case '📋 Ver Eventos':
-      // Ejecutar directamente la lógica de /eventos
-      try {
-        const sheetsClient = ctx.sheetsClient;
-        const eventos = await sheetsClient.getEventosActivos();
+// ========== BOTONES DE AYUDA INLINE ==========
+bot.on('callback_query', async (ctx) => {
+  try {
+    const action = ctx.callbackQuery.data;
+    await ctx.answerCbQuery();
+    
+    switch(action) {
+      case 'help_eventos':
+        await ctx.replyWithMarkdown(
+          '📅 *COMANDOS DE EVENTOS*\n\n' +
+          '`/nuevoevento` - Crear nuevo evento\n' +
+          '`/eventos` - Ver eventos activos\n' +
+          '`/evento E001` - Ver detalle de evento\n' +
+          '`/gastosevento E001` - Ver gastos de evento\n' +
+          '`/proximos` - Eventos próximos (7 días)'
+        );
+        break;
         
-        if (eventos.length === 0) {
-          await ctx.reply('📭 No hay eventos activos.');
-          return;
-        }
+      case 'help_pagos':
+        await ctx.replyWithMarkdown(
+          '💰 *COMANDOS DE PAGOS*\n\n' +
+          '`/deposito E001 500` - Registrar depósito\n' +
+          '`/pagocompleto E001 1500` - Pago completo\n\n' +
+          '*Formato:* `/comando [ID] [MONTO]`\n\n' +
+          '*Ejemplos:*\n' +
+          '`/deposito E001 500`\n' +
+          '`/pagocompleto E001 1000`'
+        );
+        break;
         
-        let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
+      case 'help_gastos':
+        await ctx.replyWithMarkdown(
+          '📉 *COMANDOS DE GASTOS*\n\n' +
+          '`/gasto E001 200 transporte` - Gasto en evento\n' +
+          '`/gastodirecto 150 publicidad` - Gasto directo DJ EDY\n' +
+          '`/gastosevento E001` - Ver gastos de evento\n\n' +
+          '*Ejemplos:*\n' +
+          '`/gasto E001 300 ayudante_extra`\n' +
+          '`/gastodirecto 200 compra_equipo`\n' +
+          '`/gastosevento E001`'
+        );
+        break;
         
-        eventos.forEach((evento, index) => {
-          const porcentaje = evento.presupuesto_total > 0 
-            ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
-            : '0';
-          
-          const gastosTotales = parseFloat(evento.gastos_totales) || 0;
-          
-          mensaje += `*${evento.id} - ${evento.nombre}*\n`;
-          mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
-          mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
-          mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
-          mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
-          
-          if (gastosTotales > 0) {
-            mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
-            mensaje += `📊 *Neto:* $${(evento.presupuesto_total - gastosTotales).toFixed(2)}\n`;
-          }
-          
-          mensaje += `📈 Estado: ${evento.estado}\n`;
-          
-          if (index < eventos.length - 1) {
-            mensaje += `──────────────\n`;
-          }
-        });
+      case 'help_finanzas':
+        await ctx.replyWithMarkdown(
+          '📊 *COMANDOS DE FINANZAS*\n\n' +
+          '`/balance` - Ver balances\n' +
+          '`/reporte` - Reporte mensual\n' +
+          '`/retenciones` - Ver retenciones\n\n' +
+          '*Ejemplos:*\n' +
+          '`/balance`\n' +
+          '`/reporte enero`\n' +
+          '`/retenciones`'
+        );
+        break;
         
-        await ctx.reply(mensaje, { parse_mode: 'Markdown' });
-        
-      } catch (error) {
-        await ctx.reply(`❌ Error: ${error.message}`);
-      }
-      break;
-      
-    case '💰 Registrar Depósito':
-      await ctx.reply(
-        '💰 *REGISTRAR DEPÓSITO*\n\n' +
-        '*Formato:* `/deposito [ID] [MONTO]`\n\n' +
-        '*Ejemplo:* `/deposito E001 500`\n\n' +
-        '*Para ver IDs:* Usa el botón "📋 Ver Eventos"',
-        { parse_mode: 'Markdown' }
-      );
-      break;
-      
-    case '✅ Pago Completo':
-      await ctx.reply(
-        '✅ *PAGO COMPLETO*\n\n' +
-        '*Formato:* `/pagocompleto [ID] [MONTO]`\n\n' +
-        '*Ejemplo:* `/pagocompleto E001 1500`\n\n' +
-        '*Nota:* Reparte automáticamente 65/25/10',
-        { parse_mode: 'Markdown' }
-      );
-      break;
-      
-    case '📉 Gasto en Evento':
-      await ctx.reply(
-        '📉 *GASTO EN EVENTO*\n\n' +
-        '*Formato:* `/gasto [ID] [MONTO] [DESCRIPCIÓN]`\n\n' +
-        '*Ejemplo:* `/gasto E001 200 transporte`',
-        { parse_mode: 'Markdown' }
-      );
-      break;
-      
-    case '🏢 Gasto Directo':
-      await ctx.reply(
-        '🏢 *GASTO DIRECTO DJ EDY*\n\n' +
-        '*Formato:* `/gastodirecto [MONTO] [DESCRIPCIÓN]`\n\n' +
-        '*Ejemplo:* `/gastodirecto 150 publicidad`',
-        { parse_mode: 'Markdown' }
-      );
-      break;
-      
-    case '📊 Ver Balance':
-      // Ejecutar lógica de /balance directamente
-      try {
-        const sheetsClient = ctx.sheetsClient;
-        
-        const response = await sheetsClient.sheets.spreadsheets.values.get({
-          spreadsheetId: sheetsClient.sheetId,
-          range: 'balance_cuentas!A:D',
-        });
-        
-        const rows = response.data.values || [];
-        let balances = {
-          personal: { actual: 0, pendiente: 0 },
-          djEdy: { actual: 0, pendiente: 0 },
-          ahorros: { actual: 0, pendiente: 0 }
+      case 'menu_principal':
+        // Volver al menú principal
+        ctx.message = { 
+          text: '/start', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
         };
-        
-        rows.forEach(row => {
-          const cuenta = row[0];
-          const actual = parseFloat(row[1]) || 0;
-          const pendiente = parseFloat(row[2]) || 0;
-          
-          if (cuenta === 'Personal') balances.personal = { actual, pendiente };
-          if (cuenta === 'DJ EDY') balances.djEdy = { actual, pendiente };
-          if (cuenta === 'Ahorros') balances.ahorros = { actual, pendiente };
+        return bot.handleUpdate({ 
+          message: ctx.message,
+          update_id: Date.now()
         });
-        
-        const totalPersonal = balances.personal.actual + balances.personal.pendiente;
-        const totalDjEdy = balances.djEdy.actual + balances.djEdy.pendiente;
-        const totalAhorros = balances.ahorros.actual + balances.ahorros.pendiente;
-        const totalGeneral = totalPersonal + totalDjEdy + totalAhorros;
-        
-        let mensaje = `💰 *BALANCE DE CUENTAS*\n\n`;
-        mensaje += `🎧 *Personal:* $${totalPersonal.toFixed(2)}\n`;
-        if (balances.personal.pendiente !== 0) {
-          mensaje += `   └ Pendiente: $${balances.personal.pendiente.toFixed(2)}\n`;
-        }
-        
-        mensaje += `💰 *Ahorros:* $${totalAhorros.toFixed(2)}\n`;
-        if (balances.ahorros.pendiente !== 0) {
-          mensaje += `   └ Pendiente: $${balances.ahorros.pendiente.toFixed(2)}\n`;
-        }
-        
-        mensaje += `🏢 *DJ EDY Empresa:* $${totalDjEdy.toFixed(2)}\n`;
-        if (balances.djEdy.pendiente > 0) {
-          mensaje += `   └ Depósitos retenidos: $${balances.djEdy.pendiente.toFixed(2)}\n`;
-        }
-        if (balances.djEdy.actual > 0) {
-          mensaje += `   └ Fondo empresa: $${balances.djEdy.actual.toFixed(2)}\n`;
-        }
-        
-        mensaje += `\n📈 *Total General:* $${totalGeneral.toFixed(2)}\n\n`;
-        mensaje += `🔄 *Actualizado:* ${new Date().toLocaleDateString('es-ES')}`;
-        
-        await ctx.reply(mensaje, { parse_mode: 'Markdown' });
-        
-      } catch (error) {
-        console.error('Error en balance:', error);
-        await ctx.reply(`❌ Error: ${error.message}`);
-      }
-      break;
-      
-    case '📈 Reporte Mensual':
-      await ctx.reply('Para ver reporte, escribe: /reporte\n\nPara mes específico: /reporte [mes]');
-      break;
-      
-    case '❓ Ayuda':
-      await ctx.reply('Para ayuda completa, escribe: /ayuda');
-      break;
-      
-    case '📋 Comandos':
-      await ctx.reply('Para ver todos los comandos, escribe: /comandos');
-      break;
-      
-    default:
-      await ctx.reply('Usa /ayuda para ver todos los comandos disponibles.');
+        break;
+    }
+  } catch (error) {
+    console.error('Error en callback ayuda:', error);
   }
 });
 
