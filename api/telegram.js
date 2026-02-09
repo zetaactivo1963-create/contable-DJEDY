@@ -24,25 +24,25 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
-// ========== COMANDO /START CON TECLADO ==========
-bot.start(async (ctx) => {
-  const replyKeyboard = {
-    keyboard: [
-      ['📅 Nuevo Evento', '📋 Ver Eventos'],
-      ['💰 Registrar Depósito', '✅ Pago Completo'],
-      ['📉 Gasto en Evento', '🏢 Gasto Directo'],
-      ['📊 Ver Balance', '📈 Reporte Mensual'],
-      ['❓ Ayuda', '📋 Comandos']
-    ],
-    resize_keyboard: true,
-    one_time_keyboard: false,
-    selective: true
-  };
+// ========== TECLADO PRINCIPAL ==========
+const mainKeyboard = {
+  keyboard: [
+    ['📅 Nuevo Evento', '📋 Ver Eventos'],
+    ['💰 Registrar Depósito', '✅ Pago Completo'],
+    ['📉 Gasto en Evento', '🏢 Gasto Directo'],
+    ['📊 Ver Balance', '📈 Reporte Mensual'],
+    ['❓ Ayuda', '📋 Comandos']
+  ],
+  resize_keyboard: true,
+  one_time_keyboard: false
+};
 
+// ========== COMANDO /START ==========
+bot.start(async (ctx) => {
   await ctx.reply(
     `🎧 *¡Hola DJ EDY!*\n\n` +
     `Sistema de contabilidad profesional para tus eventos.\n\n` +
-    `*👆 Usa los botones o escribe comandos:*\n\n` +
+    `*👆 Usa los botones debajo o escribe comandos:*\n\n` +
     `*📝 Ejemplos rápidos:*\n` +
     `• /deposito E001 500\n` +
     `• /gasto E001 200 transporte\n` +
@@ -50,78 +50,328 @@ bot.start(async (ctx) => {
     `• /reporte`,
     { 
       parse_mode: 'Markdown',
-      reply_markup: replyKeyboard
+      reply_markup: mainKeyboard
     }
   );
 });
 
-// ========== COMANDO /AYUDA ==========
-bot.help(async (ctx) => {
+// ========== MANEJAR BOTONES SIMPLES ==========
+bot.hears('📅 Nuevo Evento', async (ctx) => {
+  await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
+});
+
+bot.hears('📋 Ver Eventos', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    const eventos = await sheetsClient.getEventosActivos();
+    
+    if (eventos.length === 0) {
+      await ctx.reply('📭 No hay eventos activos.');
+      return;
+    }
+    
+    let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
+    
+    eventos.forEach((evento, index) => {
+      const porcentaje = evento.presupuesto_total > 0 
+        ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
+        : '0';
+      
+      // Calcular neto después de gastos
+      const gastosTotales = parseFloat(evento.gastos_totales) || 0;
+      const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
+      
+      mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
+      mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
+      mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
+      mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
+      
+      // MOSTRAR GASTOS SI EXISTEN
+      if (gastosTotales > 0) {
+        mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
+        mensaje += `📊 *Neto (después de gastos):* $${netoDespuesGastos.toFixed(2)}\n`;
+      }
+      
+      mensaje += `📈 Estado: ${evento.estado}\n`;
+      
+      if (index < eventos.length - 1) {
+        mensaje += `──────────────\n`;
+      }
+    });
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
+bot.hears('💰 Registrar Depósito', async (ctx) => {
+  await ctx.reply('💰 *REGISTRAR DEPÓSITO*\n\nFormato: /deposito [ID] [MONTO]\n\nEjemplo: /deposito E001 500', { parse_mode: 'Markdown' });
+});
+
+bot.hears('✅ Pago Completo', async (ctx) => {
+  await ctx.reply('✅ *PAGO COMPLETO*\n\nFormato: /pagocompleto [ID] [MONTO]\n\nEjemplo: /pagocompleto E001 1500', { parse_mode: 'Markdown' });
+});
+
+bot.hears('📉 Gasto en Evento', async (ctx) => {
+  await ctx.reply('📉 *GASTO EN EVENTO*\n\nFormato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gasto E001 200 transporte', { parse_mode: 'Markdown' });
+});
+
+bot.hears('🏢 Gasto Directo', async (ctx) => {
+  await ctx.reply('🏢 *GASTO DIRECTO DJ EDY*\n\nFormato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gastodirecto 150 publicidad', { parse_mode: 'Markdown' });
+});
+
+bot.hears('📊 Ver Balance', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    // Obtener todos los balances
+    const response = await sheetsClient.sheets.spreadsheets.values.get({
+      spreadsheetId: sheetsClient.sheetId,
+      range: 'balance_cuentas!A:D',
+    });
+    
+    const rows = response.data.values || [];
+    let balances = {
+      personal: { actual: 0, pendiente: 0 },
+      djEdy: { actual: 0, pendiente: 0 },
+      ahorros: { actual: 0, pendiente: 0 }
+    };
+    
+    // Extraer valores
+    rows.forEach(row => {
+      const cuenta = row[0];
+      const actual = parseFloat(row[1]) || 0;
+      const pendiente = parseFloat(row[2]) || 0;
+      
+      if (cuenta === 'Personal') {
+        balances.personal = { actual, pendiente };
+      } else if (cuenta === 'DJ EDY') {
+        balances.djEdy = { actual, pendiente };
+      } else if (cuenta === 'Ahorros') {
+        balances.ahorros = { actual, pendiente };
+      }
+    });
+    
+    // Calcular totales
+    const totalPersonal = balances.personal.actual + balances.personal.pendiente;
+    const totalDjEdy = balances.djEdy.actual + balances.djEdy.pendiente;
+    const totalAhorros = balances.ahorros.actual + balances.ahorros.pendiente;
+    const totalGeneral = totalPersonal + totalDjEdy + totalAhorros;
+    
+    // Construir mensaje
+    let mensaje = `💰 *BALANCE DE CUENTAS*\n\n`;
+    
+    // Personal
+    mensaje += `🎧 *Personal:* $${totalPersonal.toFixed(2)}\n`;
+    if (balances.personal.pendiente !== 0) {
+      mensaje += `   └ Pendiente: $${balances.personal.pendiente.toFixed(2)}\n`;
+    }
+    
+    // Ahorros
+    mensaje += `💰 *Ahorros:* $${totalAhorros.toFixed(2)}\n`;
+    if (balances.ahorros.pendiente !== 0) {
+      mensaje += `   └ Pendiente: $${balances.ahorros.pendiente.toFixed(2)}\n`;
+    }
+    
+    // DJ EDY (con desglose)
+    mensaje += `🏢 *DJ EDY Empresa:* $${totalDjEdy.toFixed(2)}\n`;
+    if (balances.djEdy.pendiente > 0) {
+      mensaje += `   └ Depósitos retenidos: $${balances.djEdy.pendiente.toFixed(2)}\n`;
+    }
+    if (balances.djEdy.actual > 0) {
+      mensaje += `   └ Fondo empresa: $${balances.djEdy.actual.toFixed(2)}\n`;
+    }
+    
+    // Total general
+    mensaje += `\n📈 *Total General:* $${totalGeneral.toFixed(2)}\n\n`;
+    mensaje += `*🔄 Última actualización:* ${new Date().toLocaleDateString('es-ES')}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error en balance:', error);
+    await ctx.reply(`❌ Error obteniendo balance: ${error.message}`);
+  }
+});
+
+bot.hears('📈 Reporte Mensual', async (ctx) => {
+  try {
+    const args = ['reporte']; // Simular que escribe /reporte
+    const mes = args[0] || new Date().toLocaleDateString('es-ES', { month: 'long' });
+    
+    const sheetsClient = ctx.sheetsClient;
+    
+    // Obtener eventos del mes
+    const eventos = await sheetsClient.getEventosDelMes(mes);
+    
+    // Obtener transacciones del mes
+    const transacciones = await sheetsClient.getTransaccionesDelMes(mes);
+    
+    // Calcular totales
+    let totalIngresos = 0;
+    let totalGastosEventos = 0;
+    let totalGastosDirectos = 0;
+    let eventosCompletados = 0;
+    let eventosEnProceso = 0;
+    let gastosPorCategoria = {};
+    
+    eventos.forEach(evento => {
+      if (evento.estado === 'completado') eventosCompletados++;
+      if (evento.estado === 'en_proceso') eventosEnProceso++;
+    });
+    
+    transacciones.forEach(t => {
+      const monto = parseFloat(t.monto) || 0;
+      if (t.tipo === 'ingreso') {
+        totalIngresos += monto;
+      } else if (t.tipo === 'gasto') {
+        if (t.evento_id) {
+          totalGastosEventos += monto;
+        } else {
+          totalGastosDirectos += monto;
+        }
+        
+        // Acumular por categoría
+        const categoria = t.categoria || 'general';
+        gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + monto;
+      }
+    });
+    
+    const totalGastos = totalGastosEventos + totalGastosDirectos;
+    const balanceMes = totalIngresos - totalGastos;
+    
+    // Construir mensaje del reporte
+    let mensaje = `📊 *REPORTE MENSUAL - ${mes.toUpperCase()}*\n\n`;
+    
+    // Sección de eventos
+    mensaje += `📅 *EVENTOS:*\n`;
+    mensaje += `   ✅ Completados: ${eventosCompletados}\n`;
+    mensaje += `   ⏳ En proceso: ${eventosEnProceso}\n`;
+    mensaje += `   📋 Total: ${eventos.length}\n\n`;
+    
+    // Sección de finanzas
+    mensaje += `💰 *FINANZAS:*\n`;
+    mensaje += `   📈 Ingresos totales: $${totalIngresos.toFixed(2)}\n`;
+    mensaje += `   📉 Gastos totales: $${totalGastos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos en eventos: $${totalGastosEventos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos directos: $${totalGastosDirectos.toFixed(2)}\n`;
+    mensaje += `   💰 Balance neto: $${balanceMes.toFixed(2)}\n\n`;
+    
+    // Sección de repartición DJ EDY
+    const fondoEmpresa = totalIngresos * 0.1;
+    const ingresoPersonal = totalIngresos * 0.65;
+    const ingresoAhorro = totalIngresos * 0.25;
+    
+    mensaje += `🏢 *DJ EDY - REPARTICIÓN TEÓRICA:*\n`;
+    mensaje += `   🎧 Personal (65%): $${ingresoPersonal.toFixed(2)}\n`;
+    mensaje += `   💰 Ahorros (25%): $${ingresoAhorro.toFixed(2)}\n`;
+    mensaje += `   🏢 Fondo empresa (10%): $${fondoEmpresa.toFixed(2)}\n\n`;
+    
+    // Sección de categorías de gastos (solo si hay gastos)
+    if (totalGastos > 0 && Object.keys(gastosPorCategoria).length > 0) {
+      mensaje += `📋 *GASTOS POR CATEGORÍA:*\n`;
+      Object.entries(gastosPorCategoria).forEach(([categoria, monto]) => {
+        const porcentaje = ((monto / totalGastos) * 100).toFixed(1);
+        mensaje += `   • ${categoria}: $${monto.toFixed(2)} (${porcentaje}%)\n`;
+      });
+      mensaje += `\n`;
+    }
+    
+    // Footer
+    mensaje += `📅 *Generado:* ${new Date().toLocaleDateString('es-ES', { 
+      weekday: 'long',
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error en /reporte:', error);
+    await ctx.reply(`❌ Error generando reporte: ${error.message}`);
+  }
+});
+
+bot.hears('❓ Ayuda', async (ctx) => {
   await ctx.reply(
     `*🎧 SISTEMA DJ EDY - AYUDA COMPLETA*\n\n` +
     `*📅 GESTIÓN DE EVENTOS:*\n` +
     `/nuevoevento - Crear evento nuevo\n` +
     `/eventos - Listar eventos activos (con gastos)\n` +
-    `/evento [ID] - Ver detalle de evento\n` +
-    `/gastosevento [ID] - Ver gastos de evento\n` +
+    `/evento [ID] - Ver detalle de evento específico\n` +
+    `/gastosevento [ID] - Ver gastos de un evento\n` +
     `/proximos - Ver eventos próximos (7 días)\n\n` +
     `*💰 PAGOS Y DEPÓSITOS:*\n` +
-    `/deposito [ID] [MONTO] - Registrar depósito\n` +
-    `/pagocompleto [ID] [MONTO] - Completar pago\n\n` +
+    `/deposito [ID] [MONTO] - Registrar depósito inicial\n` +
+    `/pagocompleto [ID] [MONTO] - Registrar pago completo (reparte auto)\n` +
+    `/pago [ID] [MONTO] - Registrar pago parcial\n\n` +
     `*📉 GASTOS:*\n` +
-    `/gasto [ID] [MONTO] [DESCRIPCIÓN] - Gasto en evento\n` +
-    `/gastodirecto [MONTO] [DESCRIPCIÓN] - Gasto general\n\n` +
+    `/gasto [ID] [MONTO] [DESCRIPCIÓN] - Gasto vinculado a evento\n` +
+    `/gastodirecto [MONTO] [DESCRIPCIÓN] - Gasto general DJ EDY\n` +
+    `/gastosevento [ID] - Ver gastos de evento\n\n` +
     `*📊 FINANZAS:*\n` +
-    `/balance - Ver balances\n` +
-    `/reporte [MES] - Reporte mensual\n` +
-    `/retenciones - Ver retenciones\n\n` +
+    `/balance - Ver balances de cuentas\n` +
+    `/retenciones - Ver retenciones del mes\n` +
+    `/reporte [MES] - Reporte mensual detallado\n\n` +
     `*📝 FORMATOS:*\n` +
-    `• ID: E001, E002, etc.\n` +
-    `• Montos: 500, 1000.50\n` +
+    `• ID Evento: E001, E002, etc.\n` +
+    `• Montos: 500, 1000.50, 2000\n` +
     `• Fechas: DD-MM-AAAA\n\n` +
-    `*🔢 REPARTICIÓN:*\n` +
-    `Al completar: 65% Personal, 25% Ahorros, 10% DJ EDY`,
+    `*🔢 REPARTICIÓN AUTOMÁTICA:*\n` +
+    `Al completar pago: 65% Personal, 25% Ahorros, 10% DJ EDY\n\n` +
+    `*📋 GASTOS EN EVENTOS:*\n` +
+    `• Se muestran en /eventos\n` +
+    `• Se restan del neto para repartir\n` +
+    `• Se ven en /reporte separados\n\n` +
+    `📞 Soporte: @tu_usuario`,
     { parse_mode: 'Markdown' }
   );
 });
 
-// ========== COMANDO /COMANDOS ==========
-bot.command('comandos', async (ctx) => {
-  const commandsKeyboard = {
-    inline_keyboard: [
-      [
-        { text: '📅 Eventos', callback_data: 'menu_eventos' },
-        { text: '💰 Pagos', callback_data: 'menu_pagos' }
-      ],
-      [
-        { text: '📉 Gastos', callback_data: 'menu_gastos' },
-        { text: '📊 Finanzas', callback_data: 'menu_finanzas' }
-      ],
-      [
-        { text: '🏠 Menú Principal', callback_data: 'menu_principal' }
-      ]
-    ]
-  };
-
+bot.hears('📋 Comandos', async (ctx) => {
   await ctx.reply(
-    `📋 *MENÚ DE COMANDOS*\n\n` +
-    `*Usa los botones o escribe directamente:*\n\n` +
-    `📅 *Eventos:* /nuevoevento /eventos /evento /proximos\n` +
-    `💰 *Pagos:* /deposito /pagocompleto\n` +
-    `📉 *Gastos:* /gasto /gastodirecto /gastosevento\n` +
-    `📊 *Finanzas:* /balance /reporte /retenciones\n\n` +
-    `*Ejemplos:*\n` +
-    `/deposito E001 500\n` +
-    `/gasto E001 200 transporte\n` +
-    `/balance`,
-    { 
-      parse_mode: 'Markdown',
-      reply_markup: commandsKeyboard
-    }
+    `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
+    `*📅 EVENTOS:*\n` +
+    `/nuevoevento /eventos /evento /proximos\n\n` +
+    `*💰 PAGOS:*\n` +
+    `/deposito /pagocompleto\n\n` +
+    `*📉 GASTOS:*\n` +
+    `/gasto /gastodirecto /gastosevento\n\n` +
+    `*📊 FINANZAS:*\n` +
+    `/balance /reporte /retenciones\n\n` +
+    `*❓ AYUDA:*\n` +
+    `/ayuda /comandos\n\n` +
+    `📝 *Usa /ayuda para ejemplos y formatos.*`,
+    { parse_mode: 'Markdown' }
   );
 });
 
-// ========== COMANDO /NUEVOEVENTO ==========
+// ========== COMANDOS PRINCIPALES (IGUAL A TU CÓDIGO) ==========
+
+bot.command('comandos', async (ctx) => {
+  await ctx.reply(
+    `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
+    `*📅 EVENTOS:*\n` +
+    `/nuevoevento /eventos /evento /proximos\n\n` +
+    `*💰 PAGOS:*\n` +
+    `/deposito /pagocompleto\n\n` +
+    `*📉 GASTOS:*\n` +
+    `/gasto /gastodirecto /gastosevento\n\n` +
+    `*📊 FINANZAS:*\n` +
+    `/balance /reporte /retenciones\n\n` +
+    `*❓ AYUDA:*\n` +
+    `/ayuda /comandos\n\n` +
+    `📝 *Usa /ayuda para ejemplos y formatos.*`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
 bot.command('nuevoevento', async (ctx) => {
   const sheetsClient = ctx.sheetsClient;
   
@@ -132,29 +382,29 @@ bot.command('nuevoevento', async (ctx) => {
   
   await ctx.reply(
     `📅 *CREAR NUEVO EVENTO*\n\n` +
-    `1. Escribe el *nombre del evento*:\n` +
-    `(ej: "Boda María", "Fiesta 15 años")`,
+    `1. Primero, escribe el *nombre del evento*:\n` +
+    `(ej: "Boda María", "Fiesta 15 años", "Evento Corporativo")`,
     { parse_mode: 'Markdown' }
   );
 });
 
-// ========== COMANDO /DEPOSITO ==========
 bot.command('deposito', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 2) {
     await ctx.reply(
-      `❌ Formato: /deposito [ID] [MONTO]\n` +
+      `❌ Formato incorrecto. Usa:\n` +
+      `/deposito [ID] [MONTO]\n\n` +
       `Ejemplo: /deposito E001 500`
     );
     return;
   }
   
   const [eventoId, montoStr] = args;
-  const monto = parseFloat(montoStr.replace(',', '.'));
+  const monto = parseFloat(montoStr);
   
   if (isNaN(monto) || monto <= 0) {
-    await ctx.reply('❌ Monto inválido.');
+    await ctx.reply('❌ Monto inválido. Usa números positivos.');
     return;
   }
   
@@ -164,9 +414,9 @@ bot.command('deposito', async (ctx) => {
     
     await ctx.reply(
       `✅ *DEPÓSITO REGISTRADO*\n\n` +
-      `📋 ${result.eventoNombre}\n` +
+      `📋 Evento: ${result.eventoNombre}\n` +
       `💰 Monto: $${monto.toFixed(2)}\n` +
-      `🏢 Cuenta: DJ EDY (pendiente)\n` +
+      `🏢 Cuenta: DJ EDY (pendiente repartición)\n` +
       `📊 Total pagado: $${result.totalPagado.toFixed(2)} / $${result.presupuestoTotal.toFixed(2)}\n` +
       `⏳ Pendiente: $${result.pendiente.toFixed(2)}`,
       { parse_mode: 'Markdown' }
@@ -177,23 +427,23 @@ bot.command('deposito', async (ctx) => {
   }
 });
 
-// ========== COMANDO /PAGOCOMPLETO ==========
 bot.command('pagocompleto', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 2) {
     await ctx.reply(
-      `❌ Formato: /pagocompleto [ID] [MONTO]\n` +
+      `❌ Formato incorrecto. Usa:\n` +
+      `/pagocompleto [ID] [MONTO]\n\n` +
       `Ejemplo: /pagocompleto E001 1500`
     );
     return;
   }
   
   const [eventoId, montoStr] = args;
-  const monto = parseFloat(montoStr.replace(',', '.'));
+  const monto = parseFloat(montoStr);
   
   if (isNaN(monto) || monto <= 0) {
-    await ctx.reply('❌ Monto inválido.');
+    await ctx.reply('❌ Monto inválido. Usa números positivos.');
     return;
   }
   
@@ -205,11 +455,12 @@ bot.command('pagocompleto', async (ctx) => {
       `🎉 *¡EVENTO COMPLETADO!*\n\n` +
       `📋 ${result.eventoNombre}\n` +
       `💰 Pago final: $${monto.toFixed(2)}\n` +
-      `🎯 Presupuesto: $${result.presupuestoTotal.toFixed(2)}\n\n` +
-      `📊 *REPARTICIÓN:*\n` +
-      `🎧 Personal (65%): $${result.reparticion.personal.toFixed(2)}\n` +
+      `🎯 Presupuesto total: $${result.presupuestoTotal.toFixed(2)}\n\n` +
+      `📊 *REPARTICIÓN AUTOMÁTICA:*\n` +
+      `🎧 DJ EDY Personal (65%): $${result.reparticion.personal.toFixed(2)}\n` +
       `💰 Ahorros (25%): $${result.reparticion.ahorro.toFixed(2)}\n` +
-      `🏢 DJ EDY (10%): $${result.reparticion.empresa.toFixed(2)}`,
+      `🏢 Fondo DJ EDY (10%): $${result.reparticion.empresa.toFixed(2)}\n\n` +
+      `✅ Pago repartido según contrato`,
       { parse_mode: 'Markdown' }
     );
     
@@ -218,7 +469,6 @@ bot.command('pagocompleto', async (ctx) => {
   }
 });
 
-// ========== COMANDO /EVENTOS ==========
 bot.command('eventos', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
@@ -236,6 +486,7 @@ bot.command('eventos', async (ctx) => {
         ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
         : '0';
       
+      // Calcular neto después de gastos
       const gastosTotales = parseFloat(evento.gastos_totales) || 0;
       const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
       
@@ -245,9 +496,10 @@ bot.command('eventos', async (ctx) => {
       mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
       mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
       
+      // MOSTRAR GASTOS SI EXISTEN
       if (gastosTotales > 0) {
         mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
-        mensaje += `📊 *Neto:* $${netoDespuesGastos.toFixed(2)}\n`;
+        mensaje += `📊 *Neto (después de gastos):* $${netoDespuesGastos.toFixed(2)}\n`;
       }
       
       mensaje += `📈 Estado: ${evento.estado}\n`;
@@ -264,11 +516,11 @@ bot.command('eventos', async (ctx) => {
   }
 });
 
-// ========== COMANDO /BALANCE ==========
 bot.command('balance', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
     
+    // Obtener todos los balances
     const response = await sheetsClient.sheets.spreadsheets.values.get({
       spreadsheetId: sheetsClient.sheetId,
       range: 'balance_cuentas!A:D',
@@ -281,32 +533,43 @@ bot.command('balance', async (ctx) => {
       ahorros: { actual: 0, pendiente: 0 }
     };
     
+    // Extraer valores
     rows.forEach(row => {
       const cuenta = row[0];
       const actual = parseFloat(row[1]) || 0;
       const pendiente = parseFloat(row[2]) || 0;
       
-      if (cuenta === 'Personal') balances.personal = { actual, pendiente };
-      if (cuenta === 'DJ EDY') balances.djEdy = { actual, pendiente };
-      if (cuenta === 'Ahorros') balances.ahorros = { actual, pendiente };
+      if (cuenta === 'Personal') {
+        balances.personal = { actual, pendiente };
+      } else if (cuenta === 'DJ EDY') {
+        balances.djEdy = { actual, pendiente };
+      } else if (cuenta === 'Ahorros') {
+        balances.ahorros = { actual, pendiente };
+      }
     });
     
+    // Calcular totales
     const totalPersonal = balances.personal.actual + balances.personal.pendiente;
     const totalDjEdy = balances.djEdy.actual + balances.djEdy.pendiente;
     const totalAhorros = balances.ahorros.actual + balances.ahorros.pendiente;
     const totalGeneral = totalPersonal + totalDjEdy + totalAhorros;
     
+    // Construir mensaje
     let mensaje = `💰 *BALANCE DE CUENTAS*\n\n`;
+    
+    // Personal
     mensaje += `🎧 *Personal:* $${totalPersonal.toFixed(2)}\n`;
     if (balances.personal.pendiente !== 0) {
       mensaje += `   └ Pendiente: $${balances.personal.pendiente.toFixed(2)}\n`;
     }
     
+    // Ahorros
     mensaje += `💰 *Ahorros:* $${totalAhorros.toFixed(2)}\n`;
     if (balances.ahorros.pendiente !== 0) {
       mensaje += `   └ Pendiente: $${balances.ahorros.pendiente.toFixed(2)}\n`;
     }
     
+    // DJ EDY (con desglose)
     mensaje += `🏢 *DJ EDY Empresa:* $${totalDjEdy.toFixed(2)}\n`;
     if (balances.djEdy.pendiente > 0) {
       mensaje += `   └ Depósitos retenidos: $${balances.djEdy.pendiente.toFixed(2)}\n`;
@@ -315,18 +578,18 @@ bot.command('balance', async (ctx) => {
       mensaje += `   └ Fondo empresa: $${balances.djEdy.actual.toFixed(2)}\n`;
     }
     
+    // Total general
     mensaje += `\n📈 *Total General:* $${totalGeneral.toFixed(2)}\n\n`;
-    mensaje += `🔄 *Actualizado:* ${new Date().toLocaleDateString('es-ES')}`;
+    mensaje += `*🔄 Última actualización:* ${new Date().toLocaleDateString('es-ES')}`;
     
     await ctx.reply(mensaje, { parse_mode: 'Markdown' });
     
   } catch (error) {
     console.error('Error en /balance:', error);
-    await ctx.reply(`❌ Error: ${error.message}`);
+    await ctx.reply(`❌ Error obteniendo balance: ${error.message}`);
   }
 });
 
-// ========== COMANDO /REPORTE ==========
 bot.command('reporte', async (ctx) => {
   try {
     const args = ctx.message.text.split(' ').slice(1);
@@ -385,7 +648,6 @@ bot.command('reporte', async (ctx) => {
   }
 });
 
-// ========== COMANDO /PROXIMOS ==========
 bot.command('proximos', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
@@ -417,7 +679,6 @@ bot.command('proximos', async (ctx) => {
   }
 });
 
-// ========== COMANDO /RETENCIONES ==========
 bot.command('retenciones', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
@@ -472,14 +733,18 @@ bot.command('retenciones', async (ctx) => {
   }
 });
 
-// ========== COMANDO /GASTO ==========
 bot.command('gasto', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length < 3) {
     await ctx.reply(
-      `❌ Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n` +
-      `Ejemplo: /gasto E001 200 transporte`
+      `❌ *Formato incorrecto*\n\n` +
+      `Usa: /gasto [ID_EVENTO] [MONTO] [DESCRIPCIÓN]\n\n` +
+      `*Ejemplos:*\n` +
+      `/gasto E001 200 transporte\n` +
+      `/gasto E001 500 alquiler equipo\n` +
+      `/gasto E001 150 ayudante extra`,
+      { parse_mode: 'Markdown' }
     );
     return;
   }
@@ -489,12 +754,13 @@ bot.command('gasto', async (ctx) => {
   const monto = parseFloat(montoStr.replace(',', '.'));
   
   if (isNaN(monto) || monto <= 0) {
-    await ctx.reply('❌ Monto inválido.');
+    await ctx.reply('❌ Monto inválido. Usa números positivos (ej: 200, 50.5).');
     return;
   }
   
   try {
     const sheetsClient = ctx.sheetsClient;
+    
     const resultado = await sheetsClient.registrarGastoEvento(
       eventoId, 
       monto, 
@@ -505,29 +771,41 @@ bot.command('gasto', async (ctx) => {
     
     await ctx.reply(
       `📉 *GASTO REGISTRADO*\n\n` +
-      `📋 ${eventoId} - ${resultado.eventoNombre}\n` +
+      `📋 Evento: ${eventoId} - ${resultado.eventoNombre}\n` +
       `💰 Gasto: $${monto.toFixed(2)}\n` +
-      `📝 ${descripcion}\n\n` +
-      `📊 *Impacto:*\n` +
-      `   Presupuesto: $${resultado.presupuestoTotal.toFixed(2)}\n` +
-      `   Gastos: $${resultado.gastosTotales.toFixed(2)}\n` +
-      `   Neto: $${resultado.netoRestante.toFixed(2)}`,
+      `📝 Descripción: ${descripcion}\n\n` +
+      `📊 *Impacto en evento:*\n` +
+      `   Presupuesto total: $${resultado.presupuestoTotal.toFixed(2)}\n` +
+      `   Gastos acumulados: $${resultado.gastosTotales.toFixed(2)}\n` +
+      `   Neto para repartir: $${resultado.netoRestante.toFixed(2)}\n\n` +
+      `✅ *Este gasto se restará al calcular la repartición final.*`,
       { parse_mode: 'Markdown' }
     );
     
   } catch (error) {
+    console.error('Error en /gasto:', error);
     await ctx.reply(`❌ Error: ${error.message}`);
   }
 });
 
-// ========== COMANDO /GASTODIRECTO ==========
 bot.command('gastodirecto', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length < 2) {
     await ctx.reply(
-      `❌ Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n` +
-      `Ejemplo: /gastodirecto 150 publicidad`
+      `❌ *Formato incorrecto*\n\n` +
+      `Usa: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n` +
+      `*Ejemplos:*\n` +
+      `/gastodirecto 200 publicidad_instagram\n` +
+      `/gastodirecto 500 compra_equipo_dj\n` +
+      `/gastodirecto 150 mantenimiento_auto\n\n` +
+      `*Categorías automáticas:*\n` +
+      `• publicidad, promo, marketing → "marketing"\n` +
+      `• equipo, compra, herramienta → "equipo"\n` +
+      `• transporte, gasolina, viaje → "transporte"\n` +
+      `• comida, alimentación → "comida"\n` +
+      `• otros → "gasto_general"`,
+      { parse_mode: 'Markdown' }
     );
     return;
   }
@@ -537,7 +815,7 @@ bot.command('gastodirecto', async (ctx) => {
   const monto = parseFloat(montoStr.replace(',', '.'));
   
   if (isNaN(monto) || monto <= 0) {
-    await ctx.reply('❌ Monto inválido.');
+    await ctx.reply('❌ Monto inválido. Usa números positivos (ej: 200, 50.5).');
     return;
   }
   
@@ -547,48 +825,48 @@ bot.command('gastodirecto', async (ctx) => {
     let categoria = 'gasto_general';
     const descLower = descripcion.toLowerCase();
     
-    if (descLower.includes('publicidad') || descLower.includes('promo') || descLower.includes('marketing')) {
+    if (descLower.includes('publicidad') || descLower.includes('promo') || descLower.includes('marketing') || descLower.includes('instagram') || descLower.includes('facebook')) {
       categoria = 'marketing';
-    } else if (descLower.includes('equipo') || descLower.includes('compra')) {
+    } else if (descLower.includes('equipo') || descLower.includes('compra') || descLower.includes('herramienta') || descLower.includes('instrumento')) {
       categoria = 'equipo';
-    } else if (descLower.includes('transporte') || descLower.includes('gasolina')) {
+    } else if (descLower.includes('transporte') || descLower.includes('gasolina') || descLower.includes('viaje') || descLower.includes('uber')) {
       categoria = 'transporte';
+    } else if (descLower.includes('comida') || descLower.includes('alimentación') || descLower.includes('restaurante')) {
+      categoria = 'comida';
+    } else if (descLower.includes('alquiler') || descLower.includes('renta')) {
+      categoria = 'alquiler';
     }
     
-    // Registrar transacción
-    await sheetsClient.registrarTransaccion({
-      tipo: 'gasto',
-      cuenta: 'DJ EDY',
-      monto: monto,
-      descripcion: `[GENERAL] ${descripcion}`,
-      evento_id: '',
-      categoria: categoria
-    }, ctx.chat.id, ctx.from.username || ctx.from.first_name);
-
-    // Actualizar balance
-    await sheetsClient.actualizarBalance('DJ EDY', -monto, false);
-
+    const resultado = await sheetsClient.registrarGastoDirecto(
+      monto, 
+      descripcion,
+      categoria,
+      ctx.chat.id,
+      ctx.from.username || ctx.from.first_name
+    );
+    
     await ctx.reply(
-      `📉 *GASTO DIRECTO*\n\n` +
+      `📉 *GASTO DIRECTO REGISTRADO*\n\n` +
       `💰 Monto: $${monto.toFixed(2)}\n` +
-      `📝 ${descripcion}\n` +
-      `🏷️ ${categoria}\n` +
+      `📝 Descripción: ${descripcion}\n` +
+      `🏷️ Categoría: ${categoria}\n` +
       `🏢 Cuenta: DJ EDY\n\n` +
-      `✅ Restado del balance actual.`,
+      `✅ *Este gasto se restará del balance actual de DJ EDY.*\n` +
+      `📅 Fecha: ${new Date().toLocaleDateString('es-ES')}`,
       { parse_mode: 'Markdown' }
     );
     
   } catch (error) {
+    console.error('Error en /gastodirecto:', error);
     await ctx.reply(`❌ Error: ${error.message}`);
   }
 });
 
-// ========== COMANDO /GASTOSEVENTO ==========
 bot.command('gastosevento', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 1) {
-    await ctx.reply('❌ Usa: /gastosevento [ID]\nEjemplo: /gastosevento E001');
+    await ctx.reply('❌ Usa: /gastosevento [ID_EVENTO]');
     return;
   }
   
@@ -605,12 +883,12 @@ bot.command('gastosevento', async (ctx) => {
     }
     
     if (gastos.length === 0) {
-      await ctx.reply(`📭 No hay gastos para ${eventoId} - ${evento.nombre}`);
+      await ctx.reply(`📭 No hay gastos registrados para ${eventoId} - ${evento.nombre}`);
       return;
     }
     
     let totalGastos = 0;
-    let mensaje = `📋 *GASTOS - ${eventoId}*\n\n`;
+    let mensaje = `📋 *GASTOS - ${eventoId} - ${evento.nombre}*\n\n`;
     
     gastos.forEach((gasto, index) => {
       totalGastos += gasto.monto;
@@ -620,9 +898,9 @@ bot.command('gastosevento', async (ctx) => {
       if (index < gastos.length - 1) mensaje += `   ─────\n`;
     });
     
-    mensaje += `\n💰 *Total:* $${totalGastos.toFixed(2)}\n`;
-    mensaje += `🎯 *Presupuesto:* $${evento.presupuesto_total.toFixed(2)}\n`;
-    mensaje += `📊 *Neto:* $${(evento.presupuesto_total - totalGastos).toFixed(2)}`;
+    mensaje += `\n💰 *Total gastos:* $${totalGastos.toFixed(2)}\n`;
+    mensaje += `🎯 *Presupuesto total:* $${evento.presupuesto_total.toFixed(2)}\n`;
+    mensaje += `📊 *Neto para repartir:* $${(evento.presupuesto_total - totalGastos).toFixed(2)}`;
     
     await ctx.reply(mensaje, { parse_mode: 'Markdown' });
     
@@ -631,150 +909,10 @@ bot.command('gastosevento', async (ctx) => {
   }
 });
 
-// ========== MANEJADOR DE BOTONES DEL TECLADO (SIMPLIFICADO) ==========
-bot.hears(['📅 Nuevo Evento', '📋 Ver Eventos', '💰 Registrar Depósito', '✅ Pago Completo', 
-           '📉 Gasto en Evento', '🏢 Gasto Directo', '📊 Ver Balance', '📈 Reporte Mensual',
-           '❓ Ayuda', '📋 Comandos'], async (ctx) => {
-  
-  const buttonText = ctx.message.text;
-  console.log(`🔔 Botón: ${buttonText}`);
-  
-  switch(buttonText) {
-    case '📅 Nuevo Evento':
-      await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
-      break;
-      
-    case '📋 Ver Eventos':
-      await ctx.reply('Mostrando eventos...');
-      // Simplemente ejecutar el comando /eventos
-      ctx.message.text = '/eventos';
-      return bot.command('eventos').middleware()(ctx);
-      break;
-      
-    case '💰 Registrar Depósito':
-      await ctx.reply('Formato: /deposito [ID] [MONTO]\nEjemplo: /deposito E001 500');
-      break;
-      
-    case '✅ Pago Completo':
-      await ctx.reply('Formato: /pagocompleto [ID] [MONTO]\nEjemplo: /pagocompleto E001 1500');
-      break;
-      
-    case '📉 Gasto en Evento':
-      await ctx.reply('Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\nEjemplo: /gasto E001 200 transporte');
-      break;
-      
-    case '🏢 Gasto Directo':
-      await ctx.reply('Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\nEjemplo: /gastodirecto 150 publicidad');
-      break;
-      
-    case '📊 Ver Balance':
-      await ctx.reply('Mostrando balance...');
-      ctx.message.text = '/balance';
-      return bot.command('balance').middleware()(ctx);
-      break;
-      
-    case '📈 Reporte Mensual':
-      await ctx.reply('Mostrando reporte...');
-      ctx.message.text = '/reporte';
-      return bot.command('reporte').middleware()(ctx);
-      break;
-      
-    case '❓ Ayuda':
-      await ctx.reply('Mostrando ayuda...');
-      ctx.message.text = '/ayuda';
-      return bot.help(ctx);
-      break;
-      
-    case '📋 Comandos':
-      await ctx.reply('Mostrando comandos...');
-      ctx.message.text = '/comandos';
-      return bot.command('comandos').middleware()(ctx);
-      break;
-  }
-});
-
-// ========== BOTONES DE AYUDA INLINE ==========
-bot.on('callback_query', async (ctx) => {
-  try {
-    const action = ctx.callbackQuery.data;
-    await ctx.answerCbQuery();
-    
-    switch(action) {
-      case 'menu_eventos':
-        await ctx.reply(
-          '📅 *COMANDOS DE EVENTOS*\n\n' +
-          '`/nuevoevento` - Crear nuevo evento\n' +
-          '`/eventos` - Ver eventos activos\n' +
-          '`/evento E001` - Ver detalle de evento\n' +
-          '`/gastosevento E001` - Ver gastos de evento\n' +
-          '`/proximos` - Eventos próximos (7 días)',
-          { parse_mode: 'Markdown' }
-        );
-        break;
-        
-      case 'menu_pagos':
-        await ctx.reply(
-          '💰 *COMANDOS DE PAGOS*\n\n' +
-          '`/deposito E001 500` - Registrar depósito\n' +
-          '`/pagocompleto E001 1500` - Pago completo\n\n' +
-          '*Formato:* `/comando [ID] [MONTO]`\n\n' +
-          '*Ejemplos:*\n' +
-          '`/deposito E001 500`\n' +
-          '`/pagocompleto E001 1000`',
-          { parse_mode: 'Markdown' }
-        );
-        break;
-        
-      case 'menu_gastos':
-        await ctx.reply(
-          '📉 *COMANDOS DE GASTOS*\n\n' +
-          '`/gasto E001 200 transporte` - Gasto en evento\n' +
-          '`/gastodirecto 150 publicidad` - Gasto directo DJ EDY\n' +
-          '`/gastosevento E001` - Ver gastos de evento\n\n' +
-          '*Ejemplos:*\n' +
-          '`/gasto E001 300 ayudante_extra`\n' +
-          '`/gastodirecto 200 compra_equipo`\n' +
-          '`/gastosevento E001`',
-          { parse_mode: 'Markdown' }
-        );
-        break;
-        
-      case 'menu_finanzas':
-        await ctx.reply(
-          '📊 *COMANDOS DE FINANZAS*\n\n' +
-          '`/balance` - Ver balances\n' +
-          '`/reporte` - Reporte mensual\n' +
-          '`/retenciones` - Ver retenciones\n\n' +
-          '*Ejemplos:*\n' +
-          '`/balance`\n' +
-          '`/reporte enero`\n' +
-          '`/retenciones`',
-          { parse_mode: 'Markdown' }
-        );
-        break;
-        
-      case 'menu_principal':
-        // Volver al menú principal
-        ctx.message = { 
-          text: '/start', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
-        };
-        return bot.handleUpdate({ 
-          message: ctx.message,
-          update_id: Date.now()
-        });
-        break;
-    }
-  } catch (error) {
-    console.error('Error en callback:', error);
-  }
-});
-
 // ========== HANDLER DE MENSAJES DE TEXTO ==========
 bot.on('text', async (ctx) => {
   try {
-    // Si es un comando, ya se manejó
+    // Si es un comando, ya se manejó por los handlers específicos
     if (ctx.message.text.startsWith('/')) {
       return;
     }
