@@ -41,9 +41,11 @@ bot.command('reporte', async (ctx) => {
     
     // Calcular totales
     let totalIngresos = 0;
-    let totalGastos = 0;
+    let totalGastosEventos = 0;
+    let totalGastosDirectos = 0;
     let eventosCompletados = 0;
     let eventosEnProceso = 0;
+    let gastosPorCategoria = {};
     
     eventos.forEach(evento => {
       if (evento.estado === 'completado') eventosCompletados++;
@@ -52,28 +54,72 @@ bot.command('reporte', async (ctx) => {
     
     transacciones.forEach(t => {
       const monto = parseFloat(t.monto) || 0;
-      if (t.tipo === 'ingreso') totalIngresos += monto;
-      if (t.tipo === 'gasto') totalGastos += monto;
+      if (t.tipo === 'ingreso') {
+        totalIngresos += monto;
+      } else if (t.tipo === 'gasto') {
+        if (t.evento_id) {
+          totalGastosEventos += monto;
+        } else {
+          totalGastosDirectos += monto;
+        }
+        
+        // Acumular por categoría
+        const categoria = t.categoria || 'general';
+        gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + monto;
+      }
     });
     
+    const totalGastos = totalGastosEventos + totalGastosDirectos;
     const balanceMes = totalIngresos - totalGastos;
     
-    await ctx.reply(
-      `📊 *REPORTE MENSUAL - ${mes.toUpperCase()}*\n\n` +
-      `📅 *Eventos:*\n` +
-      `   ✅ Completados: ${eventosCompletados}\n` +
-      `   ⏳ En proceso: ${eventosEnProceso}\n` +
-      `   📋 Total: ${eventos.length}\n\n` +
-      `💰 *Finanzas:*\n` +
-      `   📈 Ingresos: $${totalIngresos.toFixed(2)}\n` +
-      `   📉 Gastos: $${totalGastos.toFixed(2)}\n` +
-      `   💰 Balance: $${balanceMes.toFixed(2)}\n\n` +
-      `🏢 *DJ EDY Empresa:*\n` +
-      `   Depósitos retenidos: $${(totalIngresos * 0.9).toFixed(2)}\n` +
-      `   Fondo empresa (10%): $${(totalIngresos * 0.1).toFixed(2)}\n\n` +
-      `📅 *Generado:* ${new Date().toLocaleDateString('es-ES')}`,
-      { parse_mode: 'Markdown' }
-    );
+    // Construir mensaje del reporte
+    let mensaje = `📊 *REPORTE MENSUAL - ${mes.toUpperCase()}*\n\n`;
+    
+    // Sección de eventos
+    mensaje += `📅 *EVENTOS:*\n`;
+    mensaje += `   ✅ Completados: ${eventosCompletados}\n`;
+    mensaje += `   ⏳ En proceso: ${eventosEnProceso}\n`;
+    mensaje += `   📋 Total: ${eventos.length}\n\n`;
+    
+    // Sección de finanzas
+    mensaje += `💰 *FINANZAS:*\n`;
+    mensaje += `   📈 Ingresos totales: $${totalIngresos.toFixed(2)}\n`;
+    mensaje += `   📉 Gastos totales: $${totalGastos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos en eventos: $${totalGastosEventos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos directos: $${totalGastosDirectos.toFixed(2)}\n`;
+    mensaje += `   💰 Balance neto: $${balanceMes.toFixed(2)}\n\n`;
+    
+    // Sección de repartición DJ EDY
+    const fondoEmpresa = totalIngresos * 0.1;
+    const ingresoPersonal = totalIngresos * 0.65;
+    const ingresoAhorro = totalIngresos * 0.25;
+    
+    mensaje += `🏢 *DJ EDY - REPARTICIÓN TEÓRICA:*\n`;
+    mensaje += `   🎧 Personal (65%): $${ingresoPersonal.toFixed(2)}\n`;
+    mensaje += `   💰 Ahorros (25%): $${ingresoAhorro.toFixed(2)}\n`;
+    mensaje += `   🏢 Fondo empresa (10%): $${fondoEmpresa.toFixed(2)}\n\n`;
+    
+    // Sección de categorías de gastos (solo si hay gastos)
+    if (totalGastos > 0 && Object.keys(gastosPorCategoria).length > 0) {
+      mensaje += `📋 *GASTOS POR CATEGORÍA:*\n`;
+      Object.entries(gastosPorCategoria).forEach(([categoria, monto]) => {
+        const porcentaje = ((monto / totalGastos) * 100).toFixed(1);
+        mensaje += `   • ${categoria}: $${monto.toFixed(2)} (${porcentaje}%)\n`;
+      });
+      mensaje += `\n`;
+    }
+    
+    // Footer
+    mensaje += `📅 *Generado:* ${new Date().toLocaleDateString('es-ES', { 
+      weekday: 'long',
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
     
   } catch (error) {
     console.error('Error en /reporte:', error);
