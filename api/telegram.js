@@ -294,25 +294,37 @@ bot.command('eventos', async (ctx) => {
       return;
     }
     
-    let mensaje = `📅 EVENTOS ACTIVOS\n\n`;
+    let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
     
     eventos.forEach((evento, index) => {
       const porcentaje = evento.presupuesto_total > 0 
         ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
         : '0';
       
-      mensaje += `${evento.id} - ${evento.nombre}\n`;
+      // Calcular neto después de gastos
+      const gastosTotales = parseFloat(evento.gastos_totales) || 0;
+      const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
+      
+      mensaje += `*${evento.id} - ${evento.nombre}*\n`;
       mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
-      mensaje += `💰 $${evento.pagado_total.toFixed(2)} / $${evento.presupuesto_total.toFixed(2)} (${porcentaje}%)\n`;
+      mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
+      mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
       mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
-      mensaje += `📊 Estado: ${evento.estado}\n`;
+      
+      // MOSTRAR GASTOS SI EXISTEN
+      if (gastosTotales > 0) {
+        mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
+        mensaje += `📊 *Neto (después de gastos):* $${netoDespuesGastos.toFixed(2)}\n`;
+      }
+      
+      mensaje += `📈 Estado: ${evento.estado}\n`;
       
       if (index < eventos.length - 1) {
         mensaje += `──────────────\n`;
       }
     });
     
-    await ctx.reply(mensaje);
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
