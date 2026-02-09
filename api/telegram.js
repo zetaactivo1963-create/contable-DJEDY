@@ -764,6 +764,106 @@ bot.command('gastosevento', async (ctx) => {
   }
 });
 
+
+// ========== MANEJADOR DE BOTONES DEL TECLADO (FALTANTE) ==========
+bot.hears(['📅 Nuevo Evento', '📋 Ver Eventos', '💰 Registrar Depósito', '✅ Pago Completo', 
+           '📉 Gasto en Evento', '🏢 Gasto Directo', '📊 Ver Balance', '📈 Reporte Mensual',
+           '❓ Ayuda', '📋 Comandos'], async (ctx) => {
+  
+  const buttonText = ctx.message.text;
+  console.log(`🔔 Botón del teclado: ${buttonText}`);
+  
+  switch(buttonText) {
+    case '📅 Nuevo Evento':
+      await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
+      break;
+      
+    case '📋 Ver Eventos':
+      try {
+        const sheetsClient = ctx.sheetsClient;
+        const eventos = await sheetsClient.getEventosActivos();
+        
+        if (eventos.length === 0) {
+          await ctx.reply('📭 No hay eventos activos.');
+          return;
+        }
+        
+        let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
+        
+        eventos.forEach((evento, index) => {
+          const porcentaje = evento.presupuesto_total > 0 
+            ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
+            : '0';
+          
+          const gastosTotales = parseFloat(evento.gastos_totales) || 0;
+          const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
+          
+          mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+          mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
+          mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
+          mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
+          mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
+          
+          if (gastosTotales > 0) {
+            mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
+            mensaje += `📊 *Neto:* $${netoDespuesGastos.toFixed(2)}\n`;
+          }
+          
+          mensaje += `📈 Estado: ${evento.estado}\n`;
+          
+          if (index < eventos.length - 1) {
+            mensaje += `──────────────\n`;
+          }
+        });
+        
+        await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+        
+      } catch (error) {
+        await ctx.reply(`❌ Error: ${error.message}`);
+      }
+      break;
+      
+    case '💰 Registrar Depósito':
+      await ctx.reply('💰 *REGISTRAR DEPÓSITO*\n\nFormato: `/deposito [ID] [MONTO]`\nEjemplo: `/deposito E001 500`', { parse_mode: 'Markdown' });
+      break;
+      
+    case '✅ Pago Completo':
+      await ctx.reply('✅ *PAGO COMPLETO*\n\nFormato: `/pagocompleto [ID] [MONTO]`\nEjemplo: `/pagocompleto E001 1500`', { parse_mode: 'Markdown' });
+      break;
+      
+    case '📉 Gasto en Evento':
+      await ctx.reply('📉 *GASTO EN EVENTO*\n\nFormato: `/gasto [ID] [MONTO] [DESCRIPCIÓN]`\nEjemplo: `/gasto E001 200 transporte`', { parse_mode: 'Markdown' });
+      break;
+      
+    case '🏢 Gasto Directo':
+      await ctx.reply('🏢 *GASTO DIRECTO*\n\nFormato: `/gastodirecto [MONTO] [DESCRIPCIÓN]`\nEjemplo: `/gastodirecto 150 publicidad`', { parse_mode: 'Markdown' });
+      break;
+      
+    case '📊 Ver Balance':
+      // Simplemente redirigir al comando /balance
+      ctx.message.text = '/balance';
+      return bot.command('balance').middleware()(ctx);
+      break;
+      
+    case '📈 Reporte Mensual':
+      await ctx.reply('📈 *REPORTE MENSUAL*\n\nEscribe: `/reporte`\nPara mes específico: `/reporte [mes]`', { parse_mode: 'Markdown' });
+      break;
+      
+    case '❓ Ayuda':
+      // Redirigir al comando /ayuda
+      ctx.message.text = '/ayuda';
+      return bot.command('help').middleware()(ctx);
+      break;
+      
+    case '📋 Comandos':
+      // Redirigir al comando /comandos
+      ctx.message.text = '/comandos';
+      return bot.command('comandos').middleware()(ctx);
+      break;
+  }
+});
+
+
 // ========== BOTONES DE AYUDA INLINE ==========
 bot.on('callback_query', async (ctx) => {
   try {
@@ -771,7 +871,7 @@ bot.on('callback_query', async (ctx) => {
     await ctx.answerCbQuery();
     
     switch(action) {
-      case 'help_eventos':
+      case 'menu_eventos':
         await ctx.replyWithMarkdown(
           '📅 *COMANDOS DE EVENTOS*\n\n' +
           '`/nuevoevento` - Crear nuevo evento\n' +
@@ -782,7 +882,7 @@ bot.on('callback_query', async (ctx) => {
         );
         break;
         
-      case 'help_pagos':
+      case 'menu_pagos':
         await ctx.replyWithMarkdown(
           '💰 *COMANDOS DE PAGOS*\n\n' +
           '`/deposito E001 500` - Registrar depósito\n' +
@@ -794,7 +894,7 @@ bot.on('callback_query', async (ctx) => {
         );
         break;
         
-      case 'help_gastos':
+      case 'menu_gastos':
         await ctx.replyWithMarkdown(
           '📉 *COMANDOS DE GASTOS*\n\n' +
           '`/gasto E001 200 transporte` - Gasto en evento\n' +
@@ -807,7 +907,7 @@ bot.on('callback_query', async (ctx) => {
         );
         break;
         
-      case 'help_finanzas':
+      case 'menu_finanzas':
         await ctx.replyWithMarkdown(
           '📊 *COMANDOS DE FINANZAS*\n\n' +
           '`/balance` - Ver balances\n' +
@@ -832,73 +932,10 @@ bot.on('callback_query', async (ctx) => {
           update_id: Date.now()
         });
         break;
-    }
-  } catch (error) {
-    console.error('Error en callback ayuda:', error);
-  }
-});
-
-
-// ========== BOTONES DE AYUDA INLINE ==========
-bot.on('callback_query', async (ctx) => {
-  try {
-    const action = ctx.callbackQuery.data;
-    await ctx.answerCbQuery();
-    
-    switch(action) {
-      case 'help_eventos':
-        await ctx.replyWithMarkdown(
-          '📅 *COMANDOS DE EVENTOS*\n\n' +
-          '`/nuevoevento` - Crear nuevo evento\n' +
-          '`/eventos` - Ver eventos activos\n' +
-          '`/evento E001` - Ver detalle de evento\n' +
-          '`/gastosevento E001` - Ver gastos de evento\n' +
-          '`/proximos` - Eventos próximos (7 días)'
-        );
-        break;
         
-      case 'help_pagos':
-        await ctx.replyWithMarkdown(
-          '💰 *COMANDOS DE PAGOS*\n\n' +
-          '`/deposito E001 500` - Registrar depósito\n' +
-          '`/pagocompleto E001 1500` - Pago completo\n\n' +
-          '*Formato:* `/comando [ID] [MONTO]`\n\n' +
-          '*Ejemplos:*\n' +
-          '`/deposito E001 500`\n' +
-          '`/pagocompleto E001 1000`'
-        );
-        break;
-        
-      case 'help_gastos':
-        await ctx.replyWithMarkdown(
-          '📉 *COMANDOS DE GASTOS*\n\n' +
-          '`/gasto E001 200 transporte` - Gasto en evento\n' +
-          '`/gastodirecto 150 publicidad` - Gasto directo DJ EDY\n' +
-          '`/gastosevento E001` - Ver gastos de evento\n\n' +
-          '*Ejemplos:*\n' +
-          '`/gasto E001 300 ayudante_extra`\n' +
-          '`/gastodirecto 200 compra_equipo`\n' +
-          '`/gastosevento E001`'
-        );
-        break;
-        
-      case 'help_finanzas':
-        await ctx.replyWithMarkdown(
-          '📊 *COMANDOS DE FINANZAS*\n\n' +
-          '`/balance` - Ver balances\n' +
-          '`/reporte` - Reporte mensual\n' +
-          '`/retenciones` - Ver retenciones\n\n' +
-          '*Ejemplos:*\n' +
-          '`/balance`\n' +
-          '`/reporte enero`\n' +
-          '`/retenciones`'
-        );
-        break;
-        
-      case 'menu_principal':
-        // Volver al menú principal
+      case 'menu_ayuda':
         ctx.message = { 
-          text: '/start', 
+          text: '/ayuda', 
           chat: ctx.callbackQuery.message.chat,
           from: ctx.callbackQuery.from
         };
@@ -909,10 +946,26 @@ bot.on('callback_query', async (ctx) => {
         break;
     }
   } catch (error) {
-    console.error('Error en callback ayuda:', error);
+    console.error('Error en callback:', error);
   }
 });
 
+
+// ========== HANDLER DE MENSAJES DE TEXTO ==========
+bot.on('text', async (ctx) => {
+  try {
+    // Si es un comando, ya se manejó por los handlers específicos
+    if (ctx.message.text.startsWith('/')) {
+      return;
+    }
+    
+    // Si no es comando, pasar a handleMessage
+    await handleMessage(ctx);
+  } catch (error) {
+    console.error('Error en mensaje:', error);
+    await ctx.reply('❌ Error procesando mensaje.');
+  }
+});
 
 // Manejo de errores
 bot.catch((err, ctx) => {
