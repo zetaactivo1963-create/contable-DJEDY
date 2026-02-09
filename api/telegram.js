@@ -741,93 +741,147 @@ bot.on('text', async (ctx) => {
 });
 
 
-// ========== MANEJO DE BOTONES INLINE ==========
+// ========== MANEJADOR DE BOTONES INLINE ==========
 bot.on('callback_query', async (ctx) => {
   try {
     const action = ctx.callbackQuery.data;
+    console.log(`🔔 Botón presionado: ${action}`);
     
-    // Responder al callback primero
+    // Quitar el estado "cargando" del botón
     await ctx.answerCbQuery();
     
+    // Manejar según el botón presionado
     switch(action) {
-      case 'nuevoevento':
-        // Simular que el usuario escribió /nuevoevento
-        ctx.message = { 
-          text: '/nuevoevento', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
+      case 'cmd_nuevoevento':
+        await ctx.reply('Para crear un nuevo evento, escribe: /nuevoevento');
+        break;
+        
+      case 'cmd_eventos':
+        // Simular que el usuario escribió /eventos
+        await ctx.reply('Mostrando eventos activos...');
+        // Llama directamente al comando
+        const fakeCtx = {
+          ...ctx,
+          message: {
+            text: '/eventos',
+            chat: ctx.callbackQuery.message.chat,
+            from: ctx.callbackQuery.from
+          }
         };
-        // Ejecutar el comando
-        return bot.command('nuevoevento').middleware()(ctx);
+        // Busca y ejecuta el handler de /eventos
+        const commandHandler = bot.commands.get('eventos');
+        if (commandHandler) {
+          await commandHandler(fakeCtx);
+        }
         break;
         
-      case 'eventos':
-        ctx.message = { 
-          text: '/eventos', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
+      case 'cmd_deposito':
+        await ctx.reply('📝 *Formato:* /deposito [ID] [MONTO]\n\n' +
+                      '*Ejemplo:* /deposito E001 500\n\n' +
+                      'Escribe el comando con los datos específicos.',
+                      { parse_mode: 'Markdown' });
+        break;
+        
+      case 'cmd_pagocompleto':
+        await ctx.reply('📝 *Formato:* /pagocompleto [ID] [MONTO]\n\n' +
+                      '*Ejemplo:* /pagocompleto E001 1500',
+                      { parse_mode: 'Markdown' });
+        break;
+        
+      case 'cmd_gasto':
+        await ctx.reply('📝 *Formato:* /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\n' +
+                      '*Ejemplo:* /gasto E001 200 transporte al evento',
+                      { parse_mode: 'Markdown' });
+        break;
+        
+      case 'cmd_gastodirecto':
+        await ctx.reply('📝 *Formato:* /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n' +
+                      '*Ejemplo:* /gastodirecto 150 publicidad_instagram',
+                      { parse_mode: 'Markdown' });
+        break;
+        
+      case 'cmd_balance':
+        // Ejecutar comando balance directamente
+        await ctx.reply('Mostrando balance...');
+        const balanceCtx = {
+          ...ctx,
+          message: {
+            text: '/balance',
+            chat: ctx.callbackQuery.message.chat,
+            from: ctx.callbackQuery.from
+          },
+          sheetsClient: ctx.sheetsClient
         };
-        return bot.command('eventos').middleware()(ctx);
+        // Busca el handler de /balance
+        const balanceHandler = bot.commands.get('balance');
+        if (balanceHandler) {
+          await balanceHandler(balanceCtx);
+        }
         break;
         
-      case 'deposito':
-        await ctx.reply('📝 Formato: /deposito [ID] [MONTO]\n\nEjemplo: /deposito E001 500');
+      case 'cmd_reporte':
+        await ctx.reply('📊 Para ver reporte, escribe: /reporte\n\n' +
+                      'Para un mes específico: /reporte [mes]\n' +
+                      'Ejemplo: /reporte enero',
+                      { parse_mode: 'Markdown' });
         break;
         
-      case 'pagocompleto':
-        await ctx.reply('📝 Formato: /pagocompleto [ID] [MONTO]\n\nEjemplo: /pagocompleto E001 1500');
-        break;
-        
-      case 'gasto':
-        await ctx.reply('📝 Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gasto E001 200 transporte');
-        break;
-        
-      case 'gastodirecto':
-        await ctx.reply('📝 Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gastodirecto 150 publicidad');
-        break;
-        
-      case 'balance':
-        ctx.message = { 
-          text: '/balance', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
+      case 'cmd_ayuda':
+        await ctx.reply('Mostrando ayuda completa...');
+        const helpCtx = {
+          ...ctx,
+          message: {
+            text: '/ayuda',
+            chat: ctx.callbackQuery.message.chat,
+            from: ctx.callbackQuery.from
+          }
         };
-        return bot.command('balance').middleware()(ctx);
+        const helpHandler = bot.commands.get('help');
+        if (helpHandler) {
+          await helpHandler(helpCtx);
+        }
         break;
         
-      case 'reporte':
-        ctx.message = { 
-          text: '/reporte', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
+      case 'cmd_comandos':
+        await ctx.reply('Mostrando lista de comandos...');
+        const commandsCtx = {
+          ...ctx,
+          message: {
+            text: '/comandos',
+            chat: ctx.callbackQuery.message.chat,
+            from: ctx.callbackQuery.from
+          }
         };
-        return bot.command('reporte').middleware()(ctx);
-        break;
-        
-      case 'ayuda':
-        ctx.message = { 
-          text: '/ayuda', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
-        };
-        return bot.command('ayuda').middleware()(ctx);
-        break;
-        
-      case 'comandos':
-        ctx.message = { 
-          text: '/comandos', 
-          chat: ctx.callbackQuery.message.chat,
-          from: ctx.callbackQuery.from
-        };
-        return bot.command('comandos').middleware()(ctx);
+        const commandsHandler = bot.commands.get('comandos');
+        if (commandsHandler) {
+          await commandsHandler(commandsCtx);
+        }
         break;
         
       default:
-        await ctx.reply('❌ Comando no reconocido. Usa /ayuda para ver todos los comandos.');
+        await ctx.reply('❌ Botón no reconocido. Usa /ayuda para ver comandos disponibles.');
     }
+    
   } catch (error) {
-    console.error('❌ Error en botón:', error);
+    console.error('❌ Error en callback_query:', error);
     await ctx.answerCbQuery('❌ Error procesando botón');
+    await ctx.reply('⚠️ Hubo un error al procesar el botón. Intenta usar el comando directamente.');
+  }
+});
+
+// LUEGO continúa con el handler de texto
+bot.on('text', async (ctx) => {
+  try {
+    // Si es un comando, dejar que los handlers específicos lo manejen
+    if (ctx.message.text.startsWith('/')) {
+      return;
+    }
+    
+    // Si no es comando, pasar a handleMessage
+    await handleMessage(ctx);
+  } catch (error) {
+    console.error('❌ Error en bot.on(text):', error);
+    await ctx.reply('❌ Error procesando mensaje.');
   }
 });
 
