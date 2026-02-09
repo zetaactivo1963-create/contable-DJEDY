@@ -463,6 +463,82 @@ bot.command('gasto', async (ctx) => {
   }
 });
 
+// ========== COMANDO /GASTODIRECTO ==========
+bot.command('gastodirecto', async (ctx) => {
+  const args = ctx.message.text.split(' ').slice(1);
+  
+  if (args.length < 2) {
+    await ctx.reply(
+      `❌ *Formato incorrecto*\n\n` +
+      `Usa: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n` +
+      `*Ejemplos:*\n` +
+      `/gastodirecto 200 publicidad_instagram\n` +
+      `/gastodirecto 500 compra_equipo_dj\n` +
+      `/gastodirecto 150 mantenimiento_auto\n\n` +
+      `*Categorías automáticas:*\n` +
+      `• publicidad, promo, marketing → "marketing"\n` +
+      `• equipo, compra, herramienta → "equipo"\n` +
+      `• transporte, gasolina, viaje → "transporte"\n` +
+      `• comida, alimentación → "comida"\n` +
+      `• otros → "gasto_general"`,
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+  
+  const [montoStr, ...descripcionParts] = args;
+  const descripcion = descripcionParts.join(' ');
+  const monto = parseFloat(montoStr.replace(',', '.'));
+  
+  if (isNaN(monto) || monto <= 0) {
+    await ctx.reply('❌ Monto inválido. Usa números positivos (ej: 200, 50.5).');
+    return;
+  }
+  
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    // Determinar categoría automáticamente
+    let categoria = 'gasto_general';
+    const descLower = descripcion.toLowerCase();
+    
+    if (descLower.includes('publicidad') || descLower.includes('promo') || descLower.includes('marketing') || descLower.includes('instagram') || descLower.includes('facebook')) {
+      categoria = 'marketing';
+    } else if (descLower.includes('equipo') || descLower.includes('compra') || descLower.includes('herramienta') || descLower.includes('instrumento')) {
+      categoria = 'equipo';
+    } else if (descLower.includes('transporte') || descLower.includes('gasolina') || descLower.includes('viaje') || descLower.includes('uber')) {
+      categoria = 'transporte';
+    } else if (descLower.includes('comida') || descLower.includes('alimentación') || descLower.includes('restaurante')) {
+      categoria = 'comida';
+    } else if (descLower.includes('alquiler') || descLower.includes('renta')) {
+      categoria = 'alquiler';
+    }
+    
+    const resultado = await sheetsClient.registrarGastoDirecto(
+      monto, 
+      descripcion,
+      categoria,
+      ctx.chat.id,
+      ctx.from.username || ctx.from.first_name
+    );
+    
+    await ctx.reply(
+      `📉 *GASTO DIRECTO REGISTRADO*\n\n` +
+      `💰 Monto: $${monto.toFixed(2)}\n` +
+      `📝 Descripción: ${descripcion}\n` +
+      `🏷️ Categoría: ${categoria}\n` +
+      `🏢 Cuenta: DJ EDY\n\n` +
+      `✅ *Este gasto se restará del balance actual de DJ EDY.*\n` +
+      `📅 Fecha: ${new Date().toLocaleDateString('es-ES')}`,
+      { parse_mode: 'Markdown' }
+    );
+    
+  } catch (error) {
+    console.error('Error en /gastodirecto:', error);
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
 // ========== COMANDO /GASTOSEVENTO ==========
 bot.command('gastosevento', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
