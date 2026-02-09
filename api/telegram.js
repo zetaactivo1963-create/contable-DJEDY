@@ -734,6 +734,96 @@ bot.on('text', async (ctx) => {
   }
 });
 
+// ========== MANEJO DE BOTONES INLINE ==========
+bot.on('callback_query', async (ctx) => {
+  try {
+    const action = ctx.callbackQuery.data;
+    
+    // Responder al callback primero
+    await ctx.answerCbQuery();
+    
+    switch(action) {
+      case 'nuevoevento':
+        // Simular que el usuario escribió /nuevoevento
+        ctx.message = { 
+          text: '/nuevoevento', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        // Ejecutar el comando
+        return bot.command('nuevoevento').middleware()(ctx);
+        break;
+        
+      case 'eventos':
+        ctx.message = { 
+          text: '/eventos', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.command('eventos').middleware()(ctx);
+        break;
+        
+      case 'deposito':
+        await ctx.reply('📝 Formato: /deposito [ID] [MONTO]\n\nEjemplo: /deposito E001 500');
+        break;
+        
+      case 'pagocompleto':
+        await ctx.reply('📝 Formato: /pagocompleto [ID] [MONTO]\n\nEjemplo: /pagocompleto E001 1500');
+        break;
+        
+      case 'gasto':
+        await ctx.reply('📝 Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gasto E001 200 transporte');
+        break;
+        
+      case 'gastodirecto':
+        await ctx.reply('📝 Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gastodirecto 150 publicidad');
+        break;
+        
+      case 'balance':
+        ctx.message = { 
+          text: '/balance', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.command('balance').middleware()(ctx);
+        break;
+        
+      case 'reporte':
+        ctx.message = { 
+          text: '/reporte', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.command('reporte').middleware()(ctx);
+        break;
+        
+      case 'ayuda':
+        ctx.message = { 
+          text: '/ayuda', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.command('ayuda').middleware()(ctx);
+        break;
+        
+      case 'comandos':
+        ctx.message = { 
+          text: '/comandos', 
+          chat: ctx.callbackQuery.message.chat,
+          from: ctx.callbackQuery.from
+        };
+        return bot.command('comandos').middleware()(ctx);
+        break;
+        
+      default:
+        await ctx.reply('❌ Comando no reconocido. Usa /ayuda para ver todos los comandos.');
+    }
+  } catch (error) {
+    console.error('❌ Error en botón:', error);
+    await ctx.answerCbQuery('❌ Error procesando botón');
+  }
+});
+
 // Manejo de errores
 bot.catch((err, ctx) => {
   console.error(`Error:`, err);
