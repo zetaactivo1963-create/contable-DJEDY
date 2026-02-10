@@ -70,7 +70,7 @@ bot.hears('📋 Ver Eventos', async (ctx) => {
       return;
     }
     
-    let mensaje = `📅 *EVENTOS ACTIVOS*\n\n`;
+    let mensaje = `📅 EVENTOS ACTIVOS\n\n`;
     
     eventos.forEach((evento, index) => {
       const porcentaje = evento.presupuesto_total > 0 
@@ -80,15 +80,15 @@ bot.hears('📋 Ver Eventos', async (ctx) => {
       const gastosTotales = parseFloat(evento.gastos_totales) || 0;
       const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
       
-      mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `${evento.id} - ${evento.nombre}\n`;
       mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
       mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
       mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
       mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
       
       if (gastosTotales > 0) {
-        mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
-        mensaje += `📊 *Neto:* $${netoDespuesGastos.toFixed(2)}\n`;
+        mensaje += `📉 Gastos: $${gastosTotales.toFixed(2)}\n`;
+        mensaje += `📊 Neto: $${netoDespuesGastos.toFixed(2)}\n`;
       }
       
       mensaje += `📈 Estado: ${evento.estado}\n`;
@@ -98,7 +98,7 @@ bot.hears('📋 Ver Eventos', async (ctx) => {
       }
     });
     
-    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    await ctx.reply(mensaje);
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
@@ -137,19 +137,19 @@ bot.command('completados', async (ctx) => {
       return;
     }
 
-    let mensaje = `✅ *EVENTOS COMPLETADOS*\n\n`;
+    let mensaje = `✅ EVENTOS COMPLETADOS\n\n`;
     
     eventosCompletados.forEach((evento, index) => {
       const netoDespuesGastos = evento.presupuesto_total - evento.gastos_totales;
       
-      mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `${evento.id} - ${evento.nombre}\n`;
       mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
       mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
       mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)}\n`;
       
       if (evento.gastos_totales > 0) {
-        mensaje += `📉 *Gastos:* $${evento.gastos_totales.toFixed(2)}\n`;
-        mensaje += `📊 *Neto final:* $${netoDespuesGastos.toFixed(2)}\n`;
+        mensaje += `📉 Gastos: $${evento.gastos_totales.toFixed(2)}\n`;
+        mensaje += `📊 Neto final: $${netoDespuesGastos.toFixed(2)}\n`;
       }
       
       mensaje += `📅 ${evento.fecha_evento || 'Sin fecha'}\n`;
@@ -159,7 +159,7 @@ bot.command('completados', async (ctx) => {
       }
     });
     
-    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    await ctx.reply(mensaje);
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
@@ -257,14 +257,85 @@ bot.hears('📊 Ver Balance', async (ctx) => {
 });
 
 bot.hears('📈 Reporte Mensual', async (ctx) => {
-  await ctx.reply('📊 Generando reporte del mes actual...');
+  // Llamar al comando /reporte directamente
+  const sheetsClient = ctx.sheetsClient;
+  const mesActual = new Date().toLocaleDateString('es-ES', { month: 'long' });
   
-  // Simular que escribió /reporte
-  ctx.message.text = '/reporte';
-  await bot.handleUpdate({
-    update_id: Date.now(),
-    message: ctx.message
-  });
+  try {
+    const eventos = await sheetsClient.getEventosDelMes(mesActual);
+    const transacciones = await sheetsClient.getTransaccionesDelMes(mesActual);
+    
+    let totalIngresos = 0;
+    let totalGastosEventos = 0;
+    let totalGastosDirectos = 0;
+    let eventosCompletados = 0;
+    let eventosEnProceso = 0;
+    let gastosPorCategoria = {};
+    
+    eventos.forEach(evento => {
+      if (evento.estado === 'completado') eventosCompletados++;
+      if (evento.estado === 'en_proceso') eventosEnProceso++;
+    });
+    
+    transacciones.forEach(t => {
+      const monto = parseFloat(t.monto) || 0;
+      if (t.tipo === 'ingreso') {
+        totalIngresos += monto;
+      } else if (t.tipo === 'gasto') {
+        if (t.evento_id) {
+          totalGastosEventos += monto;
+        } else {
+          totalGastosDirectos += monto;
+        }
+        
+        const categoria = t.categoria || 'general';
+        gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + monto;
+      }
+    });
+    
+    const totalGastos = totalGastosEventos + totalGastosDirectos;
+    const balanceMes = totalIngresos - totalGastos;
+    
+    let mensaje = `📊 REPORTE MENSUAL - ${mesActual.toUpperCase()}\n\n`;
+    
+    mensaje += `📅 EVENTOS:\n`;
+    mensaje += `   ✅ Completados: ${eventosCompletados}\n`;
+    mensaje += `   ⏳ En proceso: ${eventosEnProceso}\n`;
+    mensaje += `   📋 Total: ${eventos.length}\n\n`;
+    
+    mensaje += `💰 FINANZAS:\n`;
+    mensaje += `   📈 Ingresos totales: $${totalIngresos.toFixed(2)}\n`;
+    mensaje += `   📉 Gastos totales: $${totalGastos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos en eventos: $${totalGastosEventos.toFixed(2)}\n`;
+    mensaje += `      └ Gastos directos: $${totalGastosDirectos.toFixed(2)}\n`;
+    mensaje += `   💰 Balance neto: $${balanceMes.toFixed(2)}\n\n`;
+    
+    const fondoEmpresa = totalIngresos * 0.1;
+    const ingresoPersonal = totalIngresos * 0.65;
+    const ingresoAhorro = totalIngresos * 0.25;
+    
+    mensaje += `🏢 DJ EDY - REPARTICIÓN TEÓRICA:\n`;
+    mensaje += `   🎧 Personal (65%): $${ingresoPersonal.toFixed(2)}\n`;
+    mensaje += `   💰 Ahorros (25%): $${ingresoAhorro.toFixed(2)}\n`;
+    mensaje += `   🏢 Fondo empresa (10%): $${fondoEmpresa.toFixed(2)}\n\n`;
+    
+    if (totalGastos > 0 && Object.keys(gastosPorCategoria).length > 0) {
+      mensaje += `📋 GASTOS POR CATEGORÍA:\n`;
+      Object.entries(gastosPorCategoria).forEach(([categoria, monto]) => {
+        const porcentaje = ((monto / totalGastos) * 100).toFixed(1);
+        mensaje += `   • ${categoria}: $${monto.toFixed(2)} (${porcentaje}%)\n`;
+      });
+      mensaje += `\n`;
+    }
+    
+    mensaje += `📅 Generado: ${new Date().toLocaleDateString('es-ES')}`;
+    
+    await ctx.reply(mensaje);
+    
+  } catch (error) {
+    console.error('Error en reporte:', error);
+    await ctx.reply(`❌ Error generando reporte: ${error.message}`);
+  }
 });
 
 bot.hears('❓ Ayuda', async (ctx) => {
@@ -837,11 +908,11 @@ bot.command('retenidos', async (ctx) => {
       return;
     }
 
-    let mensaje = `💵 *DEPÓSITOS RETENIDOS*\n\n`;
+    let mensaje = `💵 DEPÓSITOS RETENIDOS\n\n`;
     
     eventosConRetencion.forEach((evento, index) => {
       const deposito = parseFloat(evento.deposito_inicial) || 0;
-      mensaje += `${index + 1}. *${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `${index + 1}. ${evento.id} - ${evento.nombre}\n`;
       mensaje += `   Depósito: $${deposito.toFixed(2)}\n`;
       mensaje += `   Pendiente: $${evento.pendiente.toFixed(2)}\n`;
       
@@ -850,7 +921,7 @@ bot.command('retenidos', async (ctx) => {
       }
     });
     
-    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    await ctx.reply(mensaje);
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
