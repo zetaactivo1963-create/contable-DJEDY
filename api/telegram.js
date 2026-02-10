@@ -856,6 +856,8 @@ bot.command('retenidos', async (ctx) => {
     await ctx.reply(`❌ Error: ${error.message}`);
   }
 });
+
+bot.command('gastosevento', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 1) {
