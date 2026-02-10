@@ -77,7 +77,6 @@ bot.hears('📋 Ver Eventos', async (ctx) => {
         ? (evento.pagado_total / evento.presupuesto_total * 100).toFixed(0)
         : '0';
       
-      // Calcular neto después de gastos
       const gastosTotales = parseFloat(evento.gastos_totales) || 0;
       const netoDespuesGastos = evento.presupuesto_total - gastosTotales;
       
@@ -87,15 +86,75 @@ bot.hears('📋 Ver Eventos', async (ctx) => {
       mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)} (${porcentaje}%)\n`;
       mensaje += `⏳ Pendiente: $${evento.pendiente.toFixed(2)}\n`;
       
-      // MOSTRAR GASTOS SI EXISTEN
       if (gastosTotales > 0) {
         mensaje += `📉 *Gastos:* $${gastosTotales.toFixed(2)}\n`;
-        mensaje += `📊 *Neto (después de gastos):* $${netoDespuesGastos.toFixed(2)}\n`;
+        mensaje += `📊 *Neto:* $${netoDespuesGastos.toFixed(2)}\n`;
       }
       
       mensaje += `📈 Estado: ${evento.estado}\n`;
       
       if (index < eventos.length - 1) {
+        mensaje += `──────────────\n`;
+      }
+    });
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
+
+bot.command('completados', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    const response = await sheetsClient.sheets.spreadsheets.values.get({
+      spreadsheetId: sheetsClient.sheetId,
+      range: 'eventos!A:L',
+    });
+
+    const rows = response.data.values || [];
+    const header = rows[0] || [];
+    const eventosCompletados = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const evento = {};
+      header.forEach((col, index) => {
+        evento[col] = rows[i][index] || '';
+      });
+      
+      if (evento.estado === 'completado') {
+        evento.presupuesto_total = parseFloat(evento.presupuesto_total) || 0;
+        evento.pagado_total = parseFloat(evento.pagado_total) || 0;
+        evento.gastos_totales = parseFloat(evento.gastos_totales) || 0;
+        eventosCompletados.push(evento);
+      }
+    }
+
+    if (eventosCompletados.length === 0) {
+      await ctx.reply('📭 No hay eventos completados.');
+      return;
+    }
+
+    let mensaje = `✅ *EVENTOS COMPLETADOS*\n\n`;
+    
+    eventosCompletados.forEach((evento, index) => {
+      const netoDespuesGastos = evento.presupuesto_total - evento.gastos_totales;
+      
+      mensaje += `*${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `👤 ${evento.cliente || 'Sin cliente'}\n`;
+      mensaje += `💰 Presupuesto: $${evento.presupuesto_total.toFixed(2)}\n`;
+      mensaje += `📥 Pagado: $${evento.pagado_total.toFixed(2)}\n`;
+      
+      if (evento.gastos_totales > 0) {
+        mensaje += `📉 *Gastos:* $${evento.gastos_totales.toFixed(2)}\n`;
+        mensaje += `📊 *Neto final:* $${netoDespuesGastos.toFixed(2)}\n`;
+      }
+      
+      mensaje += `📅 ${evento.fecha_evento || 'Sin fecha'}\n`;
+      
+      if (index < eventosCompletados.length - 1) {
         mensaje += `──────────────\n`;
       }
     });
@@ -304,21 +363,19 @@ bot.hears('❓ Ayuda', async (ctx) => {
     `*📅 GESTIÓN DE EVENTOS:*\n` +
     `/nuevoevento - Crear evento nuevo\n` +
     `/eventos - Listar eventos activos (con gastos)\n` +
-    `/evento [ID] - Ver detalle de evento específico\n` +
-    `/gastosevento [ID] - Ver gastos de un evento\n` +
-    `/proximos - Ver eventos próximos (7 días)\n\n` +
+    `/completados - Ver eventos completados\n` +
+    `/gastosevento [ID] - Ver gastos de un evento\n\n` +
     `*💰 PAGOS Y DEPÓSITOS:*\n` +
     `/deposito [ID] [MONTO] - Registrar depósito inicial\n` +
-    `/pagocompleto [ID] [MONTO] - Registrar pago completo (reparte auto)\n` +
-    `/pago [ID] [MONTO] - Registrar pago parcial\n\n` +
+    `/pagocompleto [ID] [MONTO] - Registrar pago completo (reparte auto)\n\n` +
     `*📉 GASTOS:*\n` +
     `/gasto [ID] [MONTO] [DESCRIPCIÓN] - Gasto vinculado a evento\n` +
     `/gastodirecto [MONTO] [DESCRIPCIÓN] - Gasto general DJ EDY\n` +
     `/gastosevento [ID] - Ver gastos de evento\n\n` +
     `*📊 FINANZAS:*\n` +
     `/balance - Ver balances de cuentas\n` +
-    `/retenciones - Ver retenciones del mes\n` +
-    `/reporte [MES] - Reporte mensual detallado\n\n` +
+    `/retenidos - Ver depósitos retenidos\n` +
+    `/reporte - Reporte mensual detallado\n\n` +
     `*📝 FORMATOS:*\n` +
     `• ID Evento: E001, E002, etc.\n` +
     `• Montos: 500, 1000.50, 2000\n` +
@@ -326,10 +383,10 @@ bot.hears('❓ Ayuda', async (ctx) => {
     `*🔢 REPARTICIÓN AUTOMÁTICA:*\n` +
     `Al completar pago: 65% Personal, 25% Ahorros, 10% DJ EDY\n\n` +
     `*📋 GASTOS EN EVENTOS:*\n` +
-    `• Se muestran en /eventos\n` +
+    `• Se muestran en /eventos activos\n` +
+    `• Se muestran en /completados\n` +
     `• Se restan del neto para repartir\n` +
-    `• Se ven en /reporte separados\n\n` +
-    `📞 Soporte: @tu_usuario`,
+    `• Se ven en /reporte separados`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -338,13 +395,13 @@ bot.hears('📋 Comandos', async (ctx) => {
   await ctx.reply(
     `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
     `*📅 EVENTOS:*\n` +
-    `/nuevoevento /eventos /evento /proximos\n\n` +
+    `/nuevoevento /eventos /completados\n\n` +
     `*💰 PAGOS:*\n` +
     `/deposito /pagocompleto\n\n` +
     `*📉 GASTOS:*\n` +
     `/gasto /gastodirecto /gastosevento\n\n` +
     `*📊 FINANZAS:*\n` +
-    `/balance /reporte /retenciones\n\n` +
+    `/balance /reporte /retenidos\n\n` +
     `*❓ AYUDA:*\n` +
     `/ayuda /comandos\n\n` +
     `📝 *Usa /ayuda para ejemplos y formatos.*`,
@@ -358,13 +415,13 @@ bot.command('comandos', async (ctx) => {
   await ctx.reply(
     `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
     `*📅 EVENTOS:*\n` +
-    `/nuevoevento /eventos /evento /proximos\n\n` +
+    `/nuevoevento /eventos /completados\n\n` +
     `*💰 PAGOS:*\n` +
     `/deposito /pagocompleto\n\n` +
     `*📉 GASTOS:*\n` +
     `/gasto /gastodirecto /gastosevento\n\n` +
     `*📊 FINANZAS:*\n` +
-    `/balance /reporte /retenciones\n\n` +
+    `/balance /reporte /retenidos\n\n` +
     `*❓ AYUDA:*\n` +
     `/ayuda /comandos\n\n` +
     `📝 *Usa /ayuda para ejemplos y formatos.*`,
