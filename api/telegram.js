@@ -805,7 +805,57 @@ bot.command('gastodirecto', async (ctx) => {
   }
 });
 
-bot.command('gastosevento', async (ctx) => {
+bot.command('retenidos', async (ctx) => {
+  try {
+    const sheetsClient = ctx.sheetsClient;
+    
+    const response = await sheetsClient.sheets.spreadsheets.values.get({
+      spreadsheetId: sheetsClient.sheetId,
+      range: 'eventos!A:L',
+    });
+
+    const rows = response.data.values || [];
+    const header = rows[0] || [];
+    const eventosConRetencion = [];
+
+    for (let i = 1; i < rows.length; i++) {
+      const evento = {};
+      header.forEach((col, index) => {
+        evento[col] = rows[i][index] || '';
+      });
+      
+      if (evento.estado === 'en_proceso' && parseFloat(evento.deposito_inicial || 0) > 0) {
+        evento.deposito_inicial = parseFloat(evento.deposito_inicial) || 0;
+        evento.pendiente = parseFloat(evento.pendiente) || 0;
+        evento.presupuesto_total = parseFloat(evento.presupuesto_total) || 0;
+        eventosConRetencion.push(evento);
+      }
+    }
+
+    if (eventosConRetencion.length === 0) {
+      await ctx.reply('📭 No hay eventos con depósitos retenidos.');
+      return;
+    }
+
+    let mensaje = `💵 *DEPÓSITOS RETENIDOS*\n\n`;
+    
+    eventosConRetencion.forEach((evento, index) => {
+      const deposito = parseFloat(evento.deposito_inicial) || 0;
+      mensaje += `${index + 1}. *${evento.id} - ${evento.nombre}*\n`;
+      mensaje += `   Depósito: $${deposito.toFixed(2)}\n`;
+      mensaje += `   Pendiente: $${evento.pendiente.toFixed(2)}\n`;
+      
+      if (index < eventosConRetencion.length - 1) {
+        mensaje += `   ─────\n`;
+      }
+    });
+    
+    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    await ctx.reply(`❌ Error: ${error.message}`);
+  }
+});
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 1) {
