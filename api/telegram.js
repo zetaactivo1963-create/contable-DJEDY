@@ -257,104 +257,14 @@ bot.hears('📊 Ver Balance', async (ctx) => {
 });
 
 bot.hears('📈 Reporte Mensual', async (ctx) => {
-  try {
-    const args = ['reporte']; // Simular que escribe /reporte
-    const mes = args[0] || new Date().toLocaleDateString('es-ES', { month: 'long' });
-    
-    const sheetsClient = ctx.sheetsClient;
-    
-    // Obtener eventos del mes
-    const eventos = await sheetsClient.getEventosDelMes(mes);
-    
-    // Obtener transacciones del mes
-    const transacciones = await sheetsClient.getTransaccionesDelMes(mes);
-    
-    // Calcular totales
-    let totalIngresos = 0;
-    let totalGastosEventos = 0;
-    let totalGastosDirectos = 0;
-    let eventosCompletados = 0;
-    let eventosEnProceso = 0;
-    let gastosPorCategoria = {};
-    
-    eventos.forEach(evento => {
-      if (evento.estado === 'completado') eventosCompletados++;
-      if (evento.estado === 'en_proceso') eventosEnProceso++;
-    });
-    
-    transacciones.forEach(t => {
-      const monto = parseFloat(t.monto) || 0;
-      if (t.tipo === 'ingreso') {
-        totalIngresos += monto;
-      } else if (t.tipo === 'gasto') {
-        if (t.evento_id) {
-          totalGastosEventos += monto;
-        } else {
-          totalGastosDirectos += monto;
-        }
-        
-        // Acumular por categoría
-        const categoria = t.categoria || 'general';
-        gastosPorCategoria[categoria] = (gastosPorCategoria[categoria] || 0) + monto;
-      }
-    });
-    
-    const totalGastos = totalGastosEventos + totalGastosDirectos;
-    const balanceMes = totalIngresos - totalGastos;
-    
-    // Construir mensaje del reporte
-    let mensaje = `📊 *REPORTE MENSUAL - ${mes.toUpperCase()}*\n\n`;
-    
-    // Sección de eventos
-    mensaje += `📅 *EVENTOS:*\n`;
-    mensaje += `   ✅ Completados: ${eventosCompletados}\n`;
-    mensaje += `   ⏳ En proceso: ${eventosEnProceso}\n`;
-    mensaje += `   📋 Total: ${eventos.length}\n\n`;
-    
-    // Sección de finanzas
-    mensaje += `💰 *FINANZAS:*\n`;
-    mensaje += `   📈 Ingresos totales: $${totalIngresos.toFixed(2)}\n`;
-    mensaje += `   📉 Gastos totales: $${totalGastos.toFixed(2)}\n`;
-    mensaje += `      └ Gastos en eventos: $${totalGastosEventos.toFixed(2)}\n`;
-    mensaje += `      └ Gastos directos: $${totalGastosDirectos.toFixed(2)}\n`;
-    mensaje += `   💰 Balance neto: $${balanceMes.toFixed(2)}\n\n`;
-    
-    // Sección de repartición DJ EDY
-    const fondoEmpresa = totalIngresos * 0.1;
-    const ingresoPersonal = totalIngresos * 0.65;
-    const ingresoAhorro = totalIngresos * 0.25;
-    
-    mensaje += `🏢 *DJ EDY - REPARTICIÓN TEÓRICA:*\n`;
-    mensaje += `   🎧 Personal (65%): $${ingresoPersonal.toFixed(2)}\n`;
-    mensaje += `   💰 Ahorros (25%): $${ingresoAhorro.toFixed(2)}\n`;
-    mensaje += `   🏢 Fondo empresa (10%): $${fondoEmpresa.toFixed(2)}\n\n`;
-    
-    // Sección de categorías de gastos (solo si hay gastos)
-    if (totalGastos > 0 && Object.keys(gastosPorCategoria).length > 0) {
-      mensaje += `📋 *GASTOS POR CATEGORÍA:*\n`;
-      Object.entries(gastosPorCategoria).forEach(([categoria, monto]) => {
-        const porcentaje = ((monto / totalGastos) * 100).toFixed(1);
-        mensaje += `   • ${categoria}: $${monto.toFixed(2)} (${porcentaje}%)\n`;
-      });
-      mensaje += `\n`;
-    }
-    
-    // Footer
-    mensaje += `📅 *Generado:* ${new Date().toLocaleDateString('es-ES', { 
-      weekday: 'long',
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })}`;
-    
-    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
-    
-  } catch (error) {
-    console.error('Error en /reporte:', error);
-    await ctx.reply(`❌ Error generando reporte: ${error.message}`);
-  }
+  await ctx.reply('📊 Generando reporte del mes actual...');
+  
+  // Simular que escribió /reporte
+  ctx.message.text = '/reporte';
+  await bot.handleUpdate({
+    update_id: Date.now(),
+    message: ctx.message
+  });
 });
 
 bot.hears('❓ Ayuda', async (ctx) => {
@@ -853,15 +763,9 @@ bot.command('gastodirecto', async (ctx) => {
       `❌ *Formato incorrecto*\n\n` +
       `Usa: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n` +
       `*Ejemplos:*\n` +
-      `/gastodirecto 200 publicidad_instagram\n` +
-      `/gastodirecto 500 compra_equipo_dj\n` +
-      `/gastodirecto 150 mantenimiento_auto\n\n` +
-      `*Categorías automáticas:*\n` +
-      `• publicidad, promo, marketing → "marketing"\n` +
-      `• equipo, compra, herramienta → "equipo"\n` +
-      `• transporte, gasolina, viaje → "transporte"\n` +
-      `• comida, alimentación → "comida"\n` +
-      `• otros → "gasto_general"`,
+      `/gastodirecto 200 publicidad instagram\n` +
+      `/gastodirecto 500 compra equipo DJ\n` +
+      `/gastodirecto 150 mantenimiento auto`,
       { parse_mode: 'Markdown' }
     );
     return;
@@ -879,25 +783,10 @@ bot.command('gastodirecto', async (ctx) => {
   try {
     const sheetsClient = ctx.sheetsClient;
     
-    let categoria = 'gasto_general';
-    const descLower = descripcion.toLowerCase();
-    
-    if (descLower.includes('publicidad') || descLower.includes('promo') || descLower.includes('marketing') || descLower.includes('instagram') || descLower.includes('facebook')) {
-      categoria = 'marketing';
-    } else if (descLower.includes('equipo') || descLower.includes('compra') || descLower.includes('herramienta') || descLower.includes('instrumento')) {
-      categoria = 'equipo';
-    } else if (descLower.includes('transporte') || descLower.includes('gasolina') || descLower.includes('viaje') || descLower.includes('uber')) {
-      categoria = 'transporte';
-    } else if (descLower.includes('comida') || descLower.includes('alimentación') || descLower.includes('restaurante')) {
-      categoria = 'comida';
-    } else if (descLower.includes('alquiler') || descLower.includes('renta')) {
-      categoria = 'alquiler';
-    }
-    
     const resultado = await sheetsClient.registrarGastoDirecto(
       monto, 
       descripcion,
-      categoria,
+      'gasto_general',
       ctx.chat.id,
       ctx.from.username || ctx.from.first_name
     );
@@ -906,11 +795,8 @@ bot.command('gastodirecto', async (ctx) => {
       `📉 *GASTO DIRECTO REGISTRADO*\n\n` +
       `💰 Monto: $${monto.toFixed(2)}\n` +
       `📝 Descripción: ${descripcion}\n` +
-      `🏷️ Categoría: ${categoria}\n` +
       `🏢 Cuenta: DJ EDY\n\n` +
-      `✅ *Este gasto se restará del balance actual de DJ EDY.*\n` +
-      `📅 Fecha: ${new Date().toLocaleDateString('es-ES')}`,
-      { parse_mode: 'Markdown' }
+      `📅 Fecha: ${new Date().toLocaleDateString('es-ES')}`
     );
     
   } catch (error) {
@@ -974,7 +860,37 @@ bot.on('text', async (ctx) => {
       return;
     }
     
-    // Si no es comando, pasar a handleMessage
+    // Si no hay estado activo, mostrar ayuda
+    const sheetsClient = ctx.sheetsClient;
+    const userState = await sheetsClient.getState(ctx.chat.id);
+    
+    if (!userState || !userState.step) {
+      // Mensaje no reconocido - mostrar comandos
+      await ctx.reply(
+        `❓ *No entiendo ese mensaje*\n\n` +
+        `📋 *Comandos disponibles:*\n\n` +
+        `*📅 Eventos:*\n` +
+        `/nuevoevento - Crear evento\n` +
+        `/eventos - Ver eventos activos\n` +
+        `/completados - Ver completados\n\n` +
+        `*💰 Pagos:*\n` +
+        `/deposito [ID] [MONTO]\n` +
+        `/pagocompleto [ID] [MONTO]\n\n` +
+        `*📉 Gastos:*\n` +
+        `/gasto [ID] [MONTO] [DESC]\n` +
+        `/gastodirecto [MONTO] [DESC]\n` +
+        `/gastosevento [ID]\n\n` +
+        `*📊 Reportes:*\n` +
+        `/balance\n` +
+        `/reporte\n` +
+        `/retenidos\n\n` +
+        `Usa /ayuda para más información`,
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+    
+    // Si hay estado, pasar a handleMessage
     await handleMessage(ctx);
   } catch (error) {
     console.error('Error en mensaje:', error);
