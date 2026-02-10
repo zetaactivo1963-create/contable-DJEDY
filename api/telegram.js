@@ -814,16 +814,16 @@ bot.command('gasto', async (ctx) => {
     );
     
     await ctx.reply(
-      `📉 *GASTO REGISTRADO*\n\n` +
+      `📉 GASTO EN EVENTO REGISTRADO\n\n` +
       `📋 Evento: ${eventoId} - ${resultado.eventoNombre}\n` +
       `💰 Gasto: $${monto.toFixed(2)}\n` +
       `📝 Descripción: ${descripcion}\n\n` +
-      `📊 *Impacto en evento:*\n` +
+      `📊 Impacto en evento:\n` +
       `   Presupuesto total: $${resultado.presupuestoTotal.toFixed(2)}\n` +
       `   Gastos acumulados: $${resultado.gastosTotales.toFixed(2)}\n` +
       `   Neto para repartir: $${resultado.netoRestante.toFixed(2)}\n\n` +
-      `✅ *Este gasto se restará al calcular la repartición final.*`,
-      { parse_mode: 'Markdown' }
+      `ℹ️ Este gasto ya salió del presupuesto del cliente.\n` +
+      `Solo se restará del neto al repartir.`
     );
     
   } catch (error) {
