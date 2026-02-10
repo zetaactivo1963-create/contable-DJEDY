@@ -551,11 +551,6 @@ bot.command('eventos', async (ctx) => {
     await ctx.reply(`❌ Error: ${error.message}`);
   }
 });
-    
-  } catch (error) {
-    await ctx.reply(`❌ Error: ${error.message}`);
-  }
-});
 
 bot.command('balance', async (ctx) => {
   try {
