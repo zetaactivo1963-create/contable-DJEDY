@@ -489,18 +489,26 @@ bot.command('pagocompleto', async (ctx) => {
     const sheetsClient = ctx.sheetsClient;
     const result = await sheetsClient.registrarPagoCompleto(eventoId, monto, ctx.chat.id, ctx.from.username);
     
-    await ctx.reply(
-      `🎉 *¡EVENTO COMPLETADO!*\n\n` +
-      `📋 ${result.eventoNombre}\n` +
-      `💰 Pago final: $${monto.toFixed(2)}\n` +
-      `🎯 Presupuesto total: $${result.presupuestoTotal.toFixed(2)}\n\n` +
-      `📊 *REPARTICIÓN AUTOMÁTICA:*\n` +
-      `🎧 DJ EDY Personal (65%): $${result.reparticion.personal.toFixed(2)}\n` +
-      `💰 Ahorros (25%): $${result.reparticion.ahorro.toFixed(2)}\n` +
-      `🏢 Fondo DJ EDY (10%): $${result.reparticion.empresa.toFixed(2)}\n\n` +
-      `✅ Pago repartido según contrato`,
-      { parse_mode: 'Markdown' }
-    );
+    let mensaje = `🎉 EVENTO COMPLETADO\n\n`;
+    mensaje += `📋 ${result.eventoNombre}\n`;
+    mensaje += `💰 Pago final: $${monto.toFixed(2)}\n`;
+    mensaje += `🎯 Presupuesto total: $${result.presupuestoTotal.toFixed(2)}\n`;
+    
+    // Mostrar gastos si existen
+    if (result.gastosTotales > 0) {
+      mensaje += `📉 Gastos del evento: $${result.gastosTotales.toFixed(2)}\n`;
+      mensaje += `📊 Neto a repartir: $${result.netoRepartido.toFixed(2)}\n\n`;
+    } else {
+      mensaje += `\n`;
+    }
+    
+    mensaje += `📊 REPARTICIÓN AUTOMÁTICA:\n`;
+    mensaje += `🎧 Personal (65%): $${result.reparticion.personal.toFixed(2)}\n`;
+    mensaje += `💰 Ahorros (25%): $${result.reparticion.ahorro.toFixed(2)}\n`;
+    mensaje += `🏢 Fondo DJ EDY (10%): $${result.reparticion.empresa.toFixed(2)}\n\n`;
+    mensaje += `✅ Repartido correctamente`;
+    
+    await ctx.reply(mensaje);
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
