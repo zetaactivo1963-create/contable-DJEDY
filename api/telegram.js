@@ -385,19 +385,28 @@ bot.hears('❓ Ayuda', async (ctx) => {
 
 bot.hears('📋 Comandos', async (ctx) => {
   await ctx.reply(
-    `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
-    `*📅 EVENTOS:*\n` +
-    `/nuevoevento /eventos /completados\n\n` +
-    `*💰 PAGOS:*\n` +
-    `/deposito /pagocompleto\n\n` +
-    `*📉 GASTOS:*\n` +
-    `/gasto /gastodirecto /gastosevento\n\n` +
-    `*📊 FINANZAS:*\n` +
-    `/balance /reporte /retenidos\n\n` +
-    `*❓ AYUDA:*\n` +
-    `/ayuda /comandos\n\n` +
-    `📝 *Usa /ayuda para ejemplos y formatos.*`,
-    { parse_mode: 'Markdown' }
+    `📋 LISTA COMPLETA DE COMANDOS\n\n` +
+    `📅 EVENTOS:\n` +
+    `/nuevoevento - Crear evento nuevo\n` +
+    `/eventos - Ver eventos activos\n` +
+    `/completados - Ver eventos finalizados\n\n` +
+    `💰 PAGOS:\n` +
+    `/deposito [ID] [MONTO] - Registrar depósito\n` +
+    `/pagocompleto [ID] [MONTO] - Pago final y repartir\n\n` +
+    `📉 GASTOS:\n` +
+    `/gasto [ID] [MONTO] [DESC] - Gasto DEL evento\n` +
+    `   (alquiler, transporte del evento)\n` +
+    `/gastodirecto [MONTO] [DESC] - Gasto TUYO\n` +
+    `   (publicidad, gasolina personal)\n` +
+    `/gastosevento [ID] - Ver lista de gastos\n\n` +
+    `📊 FINANZAS:\n` +
+    `/balance - Ver balances de cuentas\n` +
+    `/reporte - Reporte mensual completo\n` +
+    `/retenidos - Depósitos pendientes\n\n` +
+    `💡 DIFERENCIA:\n` +
+    `• Gasto evento: NO sale de tu cuenta\n` +
+    `• Gasto directo: SÍ sale de tu cuenta\n\n` +
+    `❓ Usa /ayuda para más detalles`
   );
 });
 
@@ -405,19 +414,28 @@ bot.hears('📋 Comandos', async (ctx) => {
 
 bot.command('comandos', async (ctx) => {
   await ctx.reply(
-    `📋 *LISTA COMPLETA DE COMANDOS*\n\n` +
-    `*📅 EVENTOS:*\n` +
-    `/nuevoevento /eventos /completados\n\n` +
-    `*💰 PAGOS:*\n` +
-    `/deposito /pagocompleto\n\n` +
-    `*📉 GASTOS:*\n` +
-    `/gasto /gastodirecto /gastosevento\n\n` +
-    `*📊 FINANZAS:*\n` +
-    `/balance /reporte /retenidos\n\n` +
-    `*❓ AYUDA:*\n` +
-    `/ayuda /comandos\n\n` +
-    `📝 *Usa /ayuda para ejemplos y formatos.*`,
-    { parse_mode: 'Markdown' }
+    `📋 LISTA COMPLETA DE COMANDOS\n\n` +
+    `📅 EVENTOS:\n` +
+    `/nuevoevento - Crear evento nuevo\n` +
+    `/eventos - Ver eventos activos\n` +
+    `/completados - Ver eventos finalizados\n\n` +
+    `💰 PAGOS:\n` +
+    `/deposito [ID] [MONTO] - Registrar depósito\n` +
+    `/pagocompleto [ID] [MONTO] - Pago final y repartir\n\n` +
+    `📉 GASTOS:\n` +
+    `/gasto [ID] [MONTO] [DESC] - Gasto DEL evento\n` +
+    `   (alquiler, transporte del evento)\n` +
+    `/gastodirecto [MONTO] [DESC] - Gasto TUYO\n` +
+    `   (publicidad, gasolina personal)\n` +
+    `/gastosevento [ID] - Ver lista de gastos\n\n` +
+    `📊 FINANZAS:\n` +
+    `/balance - Ver balances de cuentas\n` +
+    `/reporte - Reporte mensual completo\n` +
+    `/retenidos - Depósitos pendientes\n\n` +
+    `💡 DIFERENCIA:\n` +
+    `• Gasto evento: NO sale de tu cuenta\n` +
+    `• Gasto directo: SÍ sale de tu cuenta\n\n` +
+    `❓ Usa /ayuda para más detalles`
   );
 });
 
