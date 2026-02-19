@@ -175,11 +175,25 @@ bot.hears('✅ Pago Completo', async (ctx) => {
 });
 
 bot.hears('📉 Gasto en Evento', async (ctx) => {
-  await ctx.reply('📉 *GASTO EN EVENTO*\n\nFormato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gasto E001 200 transporte', { parse_mode: 'Markdown' });
+  await ctx.reply(
+    '📉 GASTO EN EVENTO\n' +
+    '(gastos del evento: alquiler, transporte, etc)\n\n' +
+    'Formato: /gasto [ID] [MONTO] [DESCRIPCIÓN]\n\n' +
+    'Ejemplo: /gasto E001 200 transporte\n\n' +
+    'ℹ️ Este gasto se resta del neto del evento.\n' +
+    'NO sale de tu cuenta DJ EDY.'
+  );
 });
 
 bot.hears('🏢 Gasto Directo', async (ctx) => {
-  await ctx.reply('🏢 *GASTO DIRECTO DJ EDY*\n\nFormato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\nEjemplo: /gastodirecto 150 publicidad', { parse_mode: 'Markdown' });
+  await ctx.reply(
+    '🏢 GASTO DIRECTO DJ EDY\n' +
+    '(gastos tuyos: publicidad, gasolina personal, etc)\n\n' +
+    'Formato: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n' +
+    'Ejemplo: /gastodirecto 150 publicidad instagram\n\n' +
+    '⚠️ Este gasto SÍ sale de tu cuenta DJ EDY.'
+  );
+});
 });
 
 bot.hears('📊 Ver Balance', async (ctx) => {
@@ -350,9 +364,9 @@ bot.hears('❓ Ayuda', async (ctx) => {
     `/deposito [ID] [MONTO] - Registrar depósito inicial\n` +
     `/pagocompleto [ID] [MONTO] - Registrar pago completo (reparte auto)\n\n` +
     `*📉 GASTOS:*\n` +
-    `/gasto [ID] [MONTO] [DESCRIPCIÓN] - Gasto vinculado a evento\n` +
-    `/gastodirecto [MONTO] [DESCRIPCIÓN] - Gasto general DJ EDY\n` +
-    `/gastosevento [ID] - Ver gastos de evento\n\n` +
+    `/gasto [ID] [MONTO] [DESC] - Gasto DEL evento (alquiler, transporte)\n` +
+    `/gastodirecto [MONTO] [DESC] - Gasto TUYO (publicidad, gasolina)\n` +
+    `/gastosevento [ID] - Ver lista de gastos de un evento\n\n` +
     `*📊 FINANZAS:*\n` +
     `/balance - Ver balances de cuentas\n` +
     `/retenidos - Ver depósitos retenidos\n` +
@@ -363,11 +377,9 @@ bot.hears('❓ Ayuda', async (ctx) => {
     `• Fechas: DD-MM-AAAA\n\n` +
     `*🔢 REPARTICIÓN AUTOMÁTICA:*\n` +
     `Al completar pago: 65% Personal, 25% Ahorros, 10% DJ EDY\n\n` +
-    `*📋 GASTOS EN EVENTOS:*\n` +
-    `• Se muestran en /eventos activos\n` +
-    `• Se muestran en /completados\n` +
-    `• Se restan del neto para repartir\n` +
-    `• Se ven en /reporte separados`,
+    `*💡 DIFERENCIA DE GASTOS:*\n` +
+    `• Gasto evento (/gasto): Se resta del neto, NO de tu cuenta\n` +
+    `• Gasto directo (/gastodirecto): SÍ sale de tu cuenta DJ EDY`,
     { parse_mode: 'Markdown' }
   );
 });
@@ -782,13 +794,14 @@ bot.command('gasto', async (ctx) => {
   
   if (args.length < 3) {
     await ctx.reply(
-      `❌ *Formato incorrecto*\n\n` +
+      `❌ Formato incorrecto\n\n` +
       `Usa: /gasto [ID_EVENTO] [MONTO] [DESCRIPCIÓN]\n\n` +
-      `*Ejemplos:*\n` +
+      `Ejemplos:\n` +
       `/gasto E001 200 transporte\n` +
       `/gasto E001 500 alquiler equipo\n` +
-      `/gasto E001 150 ayudante extra`,
-      { parse_mode: 'Markdown' }
+      `/gasto E001 150 ayudante extra\n\n` +
+      `ℹ️ Gasto EN evento (alquiler, transporte del evento)\n` +
+      `NO sale de tu cuenta, se resta del neto.`
     );
     return;
   }
@@ -837,13 +850,14 @@ bot.command('gastodirecto', async (ctx) => {
   
   if (args.length < 2) {
     await ctx.reply(
-      `❌ *Formato incorrecto*\n\n` +
+      `❌ Formato incorrecto\n\n` +
       `Usa: /gastodirecto [MONTO] [DESCRIPCIÓN]\n\n` +
-      `*Ejemplos:*\n` +
+      `Ejemplos:\n` +
       `/gastodirecto 200 publicidad instagram\n` +
       `/gastodirecto 500 compra equipo DJ\n` +
-      `/gastodirecto 150 mantenimiento auto`,
-      { parse_mode: 'Markdown' }
+      `/gastodirecto 150 gasolina personal\n\n` +
+      `⚠️ Gasto TUYO (personal/empresa)\n` +
+      `SÍ sale de tu cuenta DJ EDY.`
     );
     return;
   }
@@ -938,7 +952,12 @@ bot.command('gastosevento', async (ctx) => {
   const args = ctx.message.text.split(' ').slice(1);
   
   if (args.length !== 1) {
-    await ctx.reply('❌ Usa: /gastosevento [ID_EVENTO]');
+    await ctx.reply(
+      `❌ Formato incorrecto\n\n` +
+      `Usa: /gastosevento [ID_EVENTO]\n\n` +
+      `Ejemplo: /gastosevento E001\n\n` +
+      `ℹ️ Muestra todos los gastos registrados de un evento.`
+    );
     return;
   }
   
@@ -960,7 +979,7 @@ bot.command('gastosevento', async (ctx) => {
     }
     
     let totalGastos = 0;
-    let mensaje = `📋 *GASTOS - ${eventoId} - ${evento.nombre}*\n\n`;
+    let mensaje = `📋 GASTOS - ${eventoId} - ${evento.nombre}\n\n`;
     
     gastos.forEach((gasto, index) => {
       totalGastos += gasto.monto;
@@ -970,11 +989,11 @@ bot.command('gastosevento', async (ctx) => {
       if (index < gastos.length - 1) mensaje += `   ─────\n`;
     });
     
-    mensaje += `\n💰 *Total gastos:* $${totalGastos.toFixed(2)}\n`;
-    mensaje += `🎯 *Presupuesto total:* $${evento.presupuesto_total.toFixed(2)}\n`;
-    mensaje += `📊 *Neto para repartir:* $${(evento.presupuesto_total - totalGastos).toFixed(2)}`;
+    mensaje += `\n💰 Total gastos: $${totalGastos.toFixed(2)}\n`;
+    mensaje += `🎯 Presupuesto total: $${evento.presupuesto_total.toFixed(2)}\n`;
+    mensaje += `📊 Neto para repartir: $${(evento.presupuesto_total - totalGastos).toFixed(2)}`;
     
-    await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+    await ctx.reply(mensaje);
     
   } catch (error) {
     await ctx.reply(`❌ Error: ${error.message}`);
