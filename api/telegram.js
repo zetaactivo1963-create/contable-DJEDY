@@ -194,7 +194,6 @@ bot.hears('🏢 Gasto Directo', async (ctx) => {
     '⚠️ Este gasto SÍ sale de tu cuenta DJ EDY.'
   );
 });
-});
 
 bot.hears('📊 Ver Balance', async (ctx) => {
   try {
